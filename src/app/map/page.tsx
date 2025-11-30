@@ -47,10 +47,7 @@ export default function MapPage() {
   }, [router])
 
   return (
-    <div
-      className="relative w-full bg-black overflow-hidden"
-      style={{ height: '100dvh', minHeight: '100vh' }}
-    >
+    <div className="fixed inset-0 w-full bg-black overflow-hidden">
       {/* Radar grid overlay */}
       <div className="absolute inset-0 pointer-events-none z-10">
         {/* Horizontal scan lines */}
