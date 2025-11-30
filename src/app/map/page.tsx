@@ -47,7 +47,7 @@ export default function MapPage() {
   }, [router])
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
+    <div className="fixed inset-0 w-full bg-black overflow-hidden">
       {/* Radar grid overlay */}
       <div className="absolute inset-0 pointer-events-none z-10">
         {/* Horizontal scan lines */}
@@ -107,10 +107,12 @@ export default function MapPage() {
       </div>
 
       {/* Header */}
-      <header 
-        className="absolute top-0 left-0 right-0 z-20 p-4 pointer-events-none font-mono"
+      <header
+        className="absolute top-0 left-0 right-0 z-20 px-4 pointer-events-none font-mono"
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+          paddingBottom: '1rem',
         }}
       >
         <div className="flex items-center justify-between">
