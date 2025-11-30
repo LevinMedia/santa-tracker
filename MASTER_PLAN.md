@@ -32,7 +32,22 @@ Return: "Santa is at city #23,847"
 UI updates via setInterval (every second)
 ```
 
-The **route is static** (pre-computed JSON). The **position is dynamic** (calculated from clock).
+The **route is static** (pre-computed CSV). The **position is dynamic** (calculated from clock).
+
+---
+
+## Current Status: v0.1 ✅
+
+### What's Built
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| City Dataset | ✅ Complete | 48,066 cities with timezone data |
+| Route Generation | ✅ Complete | Snake pattern, UTC+14 to UTC-11 |
+| Radar Map UI | ✅ Complete | Leaflet + CARTO dark tiles |
+| Real-time Playback | ✅ Complete | Timestamp-based with speed controls |
+| C64 Terminal Aesthetic | ✅ Complete | Green phosphor glow, retro UI |
+| Keyboard Navigation | ✅ Complete | Type "1" + Enter, ESC to go back |
 
 ---
 
@@ -42,215 +57,144 @@ The **route is static** (pre-computed JSON). The **position is dynamic** (calcul
 
 **Done!** → `public/worldcities.csv` (48,060 cities)
 
-Fields available:
-```
-city, city_ascii, lat, lng, country, iso2, iso3, admin_name, capital, population, id
-```
+### 2. Enrich with Timezone Data ✅
 
-### 2. Normalize Fields
+**Done!** → `public/worldcities-enriched.csv`
 
-Keep only what we need:
-
-```
-id
-city
-lat
-lng
-country
-iso2
-population
-timezone
-offset
-```
-
-### 3. Add Timezone
-
-Use `tz-lookup` (npm package) to get IANA timezone from coordinates:
+Script: `scripts/enrich-cities.ts`
 
 ```ts
-import tzlookup from "tz-lookup";
+import tzlookup from 'tz-lookup';
+import { DateTime } from 'luxon';
 
 city.timezone = tzlookup(city.lat, city.lng);
-// e.g. "Europe/Paris", "America/Chicago"
-```
-
-### 4. Compute UTC Offset for Dec 25
-
-Offsets change with DST, so compute for the actual event date:
-
-```ts
-import { DateTime } from "luxon";
-
 const dt = DateTime.fromISO("2025-12-25T00:00:00", { zone: city.timezone });
-city.offset = dt.offset / 60; // hours (may be fractional)
+city.utc_offset = dt.offset / 60; // hours
+```
+
+### 3. Sort by Timezone ✅
+
+**Done!** → `public/worldcities-sorted.csv`
+
+Script: `scripts/sort-by-timezone.ts`
+
+Cities sorted by:
+1. UTC offset (descending: +14 → -12)
+2. Latitude (descending: north → south)
+
+### 4. Add Missing UTC+14 Cities ✅
+
+**Done!** → Added Line Islands (Kiribati):
+- Kiritimati, Tabuaeran, Teraina
+- Villages: London, Tabwakea, Banana, Poland
+
+Scripts: `scripts/add-utc14-cities.ts`, `scripts/add-more-utc14.ts`
+
+---
+
+## Phase 2 — Generate Flight Route ✅
+
+### Test Flight Generated ✅
+
+**Done!** → `public/test-flight-1.csv` (48,068 stops)
+
+Script: `scripts/generate-test-flight.ts`
+
+Features:
+- North Pole as first stop (UTC+14 start)
+- North Pole as last stop (UTC-11 end)
+- Snake pattern within each timezone group
+- Rounded timezone grouping (5.5 → 5, 13.75 → 14)
+- UTC and local time for each stop
+- ~26 hour mission duration
+
+CSV Format:
+```
+stop_number,city,country,lat,lng,timezone,utc_offset,rounded_offset,utc_time,local_time
+1,North Pole,Arctic,90,0,UTC,14,14,2025-12-24 10:00:00,2025-12-25 00:00:00
+2,Teraina,Kiribati,4.6833,-160.3833,Pacific/Kiritimati,14,14,2025-12-24 10:00:05,...
 ```
 
 ---
 
-## Phase 2 — Precompute Santa's Global Route
+## Phase 3 — Radar Map Visualization ✅
 
-### 5. Group Cities by Timezone Offset
+### Map Implementation ✅
 
-```ts
-const zones = groupBy(cityData, c => c.offset)
-  .sort((a, b) => b.offset - a.offset); // east → west
-```
+**Done!** → `src/app/map/page.tsx` + `src/components/RadarMap.tsx`
 
-### 6. Sort Each Zone by Latitude
+Tech Stack:
+- **Leaflet.js** via `react-leaflet` (no API key needed)
+- **CARTO Dark Matter** tiles
+- CSS filters for green radar aesthetic
 
-```ts
-// northern first (higher latitude)
-cities.sort((a, b) => b.lat - a.lat);
-```
+Features:
+- Additive city rendering (dots appear as visited)
+- Current stop highlight (larger glowing dot)
+- Auto-pan to follow Santa's longitude
+- Horizontal scan beam animation
+- CRT screen effects (scan lines, vignette, flicker)
 
-### 7. Apply Snake Pattern
+### Playback Controls ✅
 
-For zone index `i`:
-- **Even index**: north → south
-- **Odd index**: south → north (reverse)
-
-Result:
-```
-[TZ +14 north→south] → [TZ +13 south→north] → [TZ +12 north→south] → ... → TZ -12
-```
-
-### 8. Flatten into Final Route
-
-```ts
-const route = zones.flatMap(z => z.cities);
-```
-
-This is the **global ordered list of all ~48k cities**.
+- Play/Pause with real-time timestamp tracking
+- Timeline scrubber
+- Speed options: 1x (real), 2x, 10x, 60x, MAX (300x)
+- Live UTC clock during playback
+- ETA display
 
 ---
 
-## Phase 3 — Compute Midnight Windows per Timezone
+## Phase 4 — Terminal UI ✅
 
-### 9. Calculate Start + End UTC for Each Zone
+### Home Page (C64 Style) ✅
 
-Each timezone's local midnight maps to a specific UTC time:
+**Done!** → `src/app/page.tsx`
 
-```ts
-const localMidnight = DateTime.fromISO("2025-12-25T00:00:00", { zone: tz });
+Boot sequence:
+1. North Pole Computing C64 header
+2. LOAD "SANTA_TRACKER",8,1
+3. ASCII art title
+4. Multi-language "hacking" messages (English, Chinese, Russian)
+5. System status display
+6. Command menu
 
-zone.windowStartUTC = localMidnight.toUTC();
-zone.windowEndUTC = localMidnight.plus({ hours: 1 }).toUTC();
-```
+Keyboard support:
+- Type "1" + Enter → Navigate to map
+- Full typewriter effect on commands
 
----
+### Map Page Header ✅
 
-## Phase 4 — Calculate Santa's Pace per Timezone
-
-### 10. Time per City Inside Each Zone
-
-```ts
-zone.timePerCityMs = 3600_000 / zone.cities.length;
-```
-
-The global window spans:
-- **Start**: UTC+14's midnight (Dec 24 ~10:00 UTC)
-- **End**: UTC-12's midnight+1h (Dec 26 ~13:00 UTC)
-- **Total**: ~27 hours
+**Done!** → Matching terminal aesthetic
+- [ESC] BACK button (keyboard supported)
+- System online indicator
+- Version tag (v0.1)
+- Terminal corner decorations
 
 ---
 
-## Phase 5 — Build Real-Time Engine
+## Phase 5 — Remaining Work
 
-### 11. Function: `getVisitedCountAt(utcNow)`
+### TODO: Live Mode
 
-```ts
-function getVisitedCountAt(utcNow: Date): number {
-  let visited = 0;
-  
-  for (const zone of zones) {
-    if (utcNow < zone.windowStartUTC) {
-      // Haven't reached this zone yet
-      break;
-    }
-    
-    if (utcNow >= zone.windowEndUTC) {
-      // Completed this zone
-      visited += zone.cities.length;
-      continue;
-    }
-    
-    // Currently in this zone's midnight hour
-    const elapsed = utcNow - zone.windowStartUTC;
-    const visitedHere = Math.floor(elapsed / zone.timePerCityMs);
-    visited += visitedHere;
-    break;
-  }
-  
-  return visited;
-}
-```
+- [ ] Implement `getVisitedCountAt(Date.now())` for real Christmas Eve
+- [ ] Countdown page before Dec 24 10:00 UTC
+- [ ] "Mission Complete" state after Dec 26 13:00 UTC
+- [ ] Toggle between live mode and replay mode
 
-Santa's current position = `route[visitedCount]`
+### TODO: Polish
 
-### 12. Real-Time UI Updates
+- [ ] Mobile responsive design
+- [ ] Touch-friendly scrubber
+- [ ] Loading states and error handling
+- [ ] Performance optimization for 48k markers
 
-```ts
-// In React component
-useEffect(() => {
-  const interval = setInterval(() => {
-    const now = new Date();
-    const idx = getVisitedCountAt(now);
-    setCurrentCity(route[idx]);
-  }, 1000); // Update every second
-  
-  return () => clearInterval(interval);
-}, []);
-```
+### TODO: Optional Features
 
----
-
-## Phase 6 — Front-End Visualization (Radar Map)
-
-### 13. Mapbox / Deck.gl Display
-
-- **Base layer**: Custom radar-green theme
-- **Santa's path**: Great-circle arcs
-- **Past edges**: Faint trail
-- **Recent edges**: Bright, animated
-- **Active city**: Glowing pulsing dot
-- **Santa position**: `route[visitedCount]`
-
----
-
-## Phase 7 — Donation System (Optional)
-
-> **Note**: Supabase is only needed if you add donations or user features. The flight itself requires no database.
-
-### Option A: Partner with Known Charity
-- Easy integration
-- No compliance burden
-- Use their URL with referral codes
-- Track totals via their API or custom campaign link
-
-### Option B: Fiscal Sponsor + Stripe Checkout
-- Accept tax-deductible donations directly
-- Stripe Checkout + Webhooks → Supabase
-- Real-time donation counter on site
-
----
-
-## Phase 8 — Hosting + Scheduling
-
-- **Next.js** app on **Vercel**
-- Pre-generate city data + route at build time
-- Real-time uses `Date.now()` for current UTC
-- Users can join at any point in the timeline
-- After mission complete → show full path replay
-
-### User Experience by Time
-
-| User visits at... | They see... |
-|-------------------|-------------|
-| Before Dec 24 10:00 UTC | Countdown to launch |
-| Dec 24, 14:00 UTC | Santa live over Japan |
-| Dec 25, 00:00 UTC | Santa live over Europe |
-| Dec 25, 10:00 UTC | Santa live over Americas |
-| After Dec 26, 13:00 UTC | Mission complete — replay mode |
+- [ ] Donation system integration
+- [ ] Social sharing
+- [ ] City search/jump
+- [ ] Statistics dashboard
 
 ---
 
@@ -261,76 +205,68 @@ useEffect(() => {
 | Framework | Next.js 16 (App Router) |
 | Styling | Tailwind CSS |
 | Components | Headless UI |
-| Maps | Mapbox GL / Deck.gl |
+| Maps | Leaflet + react-leaflet |
+| Tiles | CARTO Dark Matter |
 | Time | Luxon |
 | Timezone Lookup | tz-lookup |
+| CSV Processing | csv-parse, csv-stringify |
 | Hosting | Vercel |
 | Database | Supabase *(only if donations added)* |
 
 ---
 
-## Data Architecture
+## Project Structure
 
 ```
 public/
-  worldcities.csv       # ✅ Raw SimpleMaps data (48k cities)
-
-src/
-  data/
-    route.json          # Pre-computed ordered city list (generated)
-    zones.json          # Timezone windows + timing (generated)
-  
-  lib/
-    mission-engine.ts   # getVisitedCountAt() + helpers
-    process-cities.ts   # Build script: CSV → JSON
+  worldcities.csv           # Raw SimpleMaps data
+  worldcities-enriched.csv  # + timezone, utc_offset columns
+  worldcities-sorted.csv    # Sorted by timezone (east → west)
+  test-flight-1.csv         # Generated flight with timestamps
 
 scripts/
-  generate-route.ts     # One-time build script
+  enrich-cities.ts          # Add timezone data to cities
+  sort-by-timezone.ts       # Sort cities by offset
+  add-utc14-cities.ts       # Add Line Islands
+  add-more-utc14.ts         # Add more Kiritimati villages
+  generate-test-flight.ts   # Create timestamped flight route
+
+src/
+  app/
+    page.tsx                # Home page (C64 terminal)
+    map/page.tsx            # Radar map page
+    globals.css             # Animations, theme variables
+    layout.tsx              # Fonts (Crimson Pro, JetBrains Mono)
+  
+  components/
+    RadarMap.tsx            # Leaflet map + playback controls
+  
+  lib/
+    supabase/               # Supabase client (for future donations)
 ```
 
-### Build-Time vs Runtime
-
-| Data | When Generated | How Used |
-|------|----------------|----------|
-| `route.json` | Build time | Imported statically |
-| `zones.json` | Build time | Imported statically |
-| Santa's position | Runtime | Calculated from `Date.now()` |
-
 ---
 
-## Action Checklist
-
-- [x] Download SimpleMaps dataset → `/public/worldcities.csv`
-- [ ] Install dependencies (`tz-lookup`, `luxon`)
-- [ ] Create build script to process CSV
-- [ ] Normalize + enrich with timezone + UTC offset
-- [ ] Group cities by offset
-- [ ] Sort by latitude within each zone
-- [ ] Apply snake pattern (alternating direction)
-- [ ] Flatten into final route array
-- [ ] Compute midnight windows per timezone
-- [ ] Compute time-per-city per timezone
-- [ ] Output `route.json` and `zones.json`
-- [ ] Implement mission engine (`getVisitedCountAt`)
-- [ ] Build real-time UI with `setInterval`
-- [ ] Integrate with Mapbox
-- [ ] Add donation system *(optional)*
-- [ ] Deploy to Vercel
-
----
-
-## Getting Started
+## Running Locally
 
 ```bash
 # Install dependencies
 npm install
 
-# Generate route data (run once, or at build)
-npm run generate-route
-
 # Run development server
 npm run dev
+
+# Generate flight data (if modifying route)
+npx tsx scripts/generate-test-flight.ts
 ```
+
+---
+
+## Deployment
+
+Hosted on Vercel: https://santa-tracker.vercel.app *(when deployed)*
+
+GitHub: https://github.com/LevinMedia/santa-tracker
 
 ---
 
