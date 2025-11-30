@@ -29,8 +29,9 @@ interface BootLine {
 }
 
 interface MenuItem {
-  text: string
+  text?: string
   delay: number
+  type?: 'hr'
 }
 
 interface CommandOption {
@@ -50,11 +51,11 @@ const BOOT_SEQUENCE: BootLine[] = [
 ]
 
 const MENU_ITEMS: MenuItem[] = [
-  { text: '════════════════════════════════════════════════════', delay: 2200 },
+  { type: 'hr', delay: 2200 },
   { text: '', delay: 2300 },
   { text: '    GLOBAL SANTA TRACKING SYSTEM v0.1', delay: 2400 },
   { text: '', delay: 2600 },
-  { text: '════════════════════════════════════════════════════', delay: 2700 },
+  { type: 'hr', delay: 2700 },
   { text: '', delay: 2800 },
   { text: '    Accessing NORAD mainframe...', delay: 3000 },
   { text: '    连接中国卫星网络...', delay: 3300 },
@@ -64,7 +65,7 @@ const MENU_ITEMS: MenuItem[] = [
   { text: '    SYSTEM STATUS........ STANDBY', delay: 4400 },
   { text: '    SANTA ACTIVITY....... NOT DETECTED', delay: 4600 },
   { text: '', delay: 4800 },
-  { text: '════════════════════════════════════════════════════', delay: 4900 },
+  { type: 'hr', delay: 4900 },
   { text: '', delay: 5000 },
 ]
 
@@ -259,8 +260,12 @@ export default function Home() {
         {showAscii && (
           <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
             {MENU_ITEMS.slice(0, visibleMenuLines).map((item, index) => (
-              <div key={index} className="min-h-[1.5em]">
-                {item.text}
+              <div key={index} className="min-h-[1.5em] w-full">
+                {item.type === 'hr' ? (
+                  <hr className="border-0 border-t border-[#33ff33] opacity-70 w-full" />
+                ) : (
+                  item.text
+                )}
               </div>
             ))}
           </div>
