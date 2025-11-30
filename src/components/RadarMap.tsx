@@ -319,10 +319,11 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
       </div>
       
       {/* Scrubber Control Panel */}
-      <div 
-        className="absolute bottom-0 left-0 right-0 z-[1000] font-mono px-4 pb-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8"
+      <div
+        className="absolute bottom-0 left-0 right-0 z-[1000] font-mono px-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8"
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
         }}
       >
         {/* Top border */}
