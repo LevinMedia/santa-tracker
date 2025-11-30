@@ -114,6 +114,17 @@ export default function Home() {
     [persistEntries],
   )
 
+  const updateEntry = useCallback(
+    (id: string, text: string) => {
+      setEntries(prev => {
+        const next = prev.map(entry => (entry.id === id ? { ...entry, text } : entry))
+        persistEntries(next)
+        return next
+      })
+    },
+    [persistEntries],
+  )
+
   const sleep = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), [])
 
   const runBootSequence = useCallback(() => {
@@ -258,13 +269,16 @@ export default function Home() {
         await sleep(200)
 
         const frames = ['/', '-', '\\', '|']
-        for (let i = 0; i < 8; i++) {
-          appendEntry({
-            id: `load-frame-${i}-${Date.now()}`,
-            kind: 'text',
-            text: `LOADING FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 4) + 1)}`,
-          })
-          await sleep(160)
+        const loadingId = `loading-${Date.now()}`
+        appendEntry({
+          id: loadingId,
+          kind: 'text',
+          text: 'LOADING FLIGHT LOGS / ...',
+        })
+
+        for (let i = 0; i < 18; i++) {
+          updateEntry(loadingId, `LOADING FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+          await sleep(140)
         }
 
         appendEntry({
@@ -292,7 +306,7 @@ export default function Home() {
       setUserInput('')
       setIsProcessing(false)
     },
-    [appendEntry, isProcessing, router, showPrompt, sleep],
+    [appendEntry, isProcessing, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
