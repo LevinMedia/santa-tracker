@@ -2,9 +2,8 @@
 
 // Santa Tracker v0.1 - Trigger redeploy
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 
 const ASCII_TITLE = `
  ███████╗ █████╗ ███╗   ██╗████████╗ █████╗ 
@@ -21,6 +20,8 @@ const ASCII_TITLE = `
     ██║   ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║
     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 `
+
+type EntryKind = 'text' | 'hr' | 'ascii'
 
 interface BootLine {
   text: string
@@ -40,6 +41,14 @@ interface CommandOption {
   href: string
   delay: number
 }
+
+interface TerminalEntry {
+  id: string
+  kind: EntryKind
+  text?: string
+}
+
+const STORAGE_KEY = 'terminalHistory'
 
 const BOOT_SEQUENCE: BootLine[] = [
   { text: '**** NORTH POLE COMPUTING C64 ****', delay: 0 },
@@ -76,9 +85,7 @@ const COMMAND_OPTIONS: CommandOption[] = [
 
 export default function Home() {
   const router = useRouter()
-  const [visibleBootLines, setVisibleBootLines] = useState<number>(0)
-  const [visibleMenuLines, setVisibleMenuLines] = useState<number>(0)
-  const [showAscii, setShowAscii] = useState(false)
+  const [entries, setEntries] = useState<TerminalEntry[]>([])
   const [showOptions, setShowOptions] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -86,7 +93,104 @@ export default function Home() {
   const [typingLine, setTypingLine] = useState<number | null>(null)
   const [typedChars, setTypedChars] = useState(0)
   const [userInput, setUserInput] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const hasBootRun = useRef(false)
+  const timersRef = useRef<NodeJS.Timeout[]>([])
+
+  const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries))
+  }, [])
+
+  const appendEntry = useCallback(
+    (entry: TerminalEntry) => {
+      setEntries(prev => {
+        const next = [...prev, entry]
+        persistEntries(next)
+        return next
+      })
+    },
+    [persistEntries],
+  )
+
+  const sleep = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), [])
+
+  const runBootSequence = useCallback(() => {
+    if (hasBootRun.current) return
+    hasBootRun.current = true
+
+    const timers: NodeJS.Timeout[] = []
+
+    BOOT_SEQUENCE.forEach((line, index) => {
+      if (line.isCommand) {
+        timers.push(
+          setTimeout(() => {
+            setTypingLine(index)
+            setTypedChars(0)
+            const chars = line.text.length
+            for (let i = 0; i <= chars; i++) {
+              timers.push(setTimeout(() => setTypedChars(i), i * 50))
+            }
+            timers.push(
+              setTimeout(() => {
+                setTypingLine(null)
+                appendEntry({
+                  id: `boot-${index}`,
+                  kind: 'text',
+                  text: line.text,
+                })
+              }, chars * 50 + 200),
+            )
+          }, line.delay),
+        )
+      } else {
+        timers.push(
+          setTimeout(
+            () =>
+              appendEntry({
+                id: `boot-${index}`,
+                kind: 'text',
+                text: line.text,
+              }),
+            line.delay,
+          ),
+        )
+      }
+    })
+
+    timers.push(
+      setTimeout(
+        () =>
+          appendEntry({
+            id: 'ascii-title',
+            kind: 'ascii',
+            text: ASCII_TITLE,
+          }),
+        2000,
+      ),
+    )
+
+    MENU_ITEMS.forEach((item, index) => {
+      timers.push(
+        setTimeout(
+          () =>
+            appendEntry({
+              id: `menu-${index}`,
+              kind: item.type === 'hr' ? 'hr' : 'text',
+              text: item.text,
+            }),
+          item.delay,
+        ),
+      )
+    })
+
+    timers.push(setTimeout(() => setShowOptions(true), 5200))
+
+    timers.push(setTimeout(() => setShowPrompt(true), 5800))
+
+    timersRef.current = timers
+  }, [appendEntry])
 
   // Cursor blink effect
   useEffect(() => {
@@ -107,78 +211,107 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [])
 
-  // Boot sequence animation
+  // Boot sequence animation with history restore
   useEffect(() => {
-    const timers: NodeJS.Timeout[] = []
+    if (typeof window === 'undefined') return
 
-    // Animate boot sequence lines
-    BOOT_SEQUENCE.forEach((line, index) => {
-      if (line.isCommand) {
-        // Typewriter effect for commands
-        timers.push(setTimeout(() => {
-          setTypingLine(index)
-          setTypedChars(0)
-          const chars = line.text.length
-          for (let i = 0; i <= chars; i++) {
-            timers.push(setTimeout(() => setTypedChars(i), i * 50))
-          }
-          timers.push(setTimeout(() => {
-            setTypingLine(null)
-            setVisibleBootLines(index + 1)
-          }, chars * 50 + 200))
-        }, line.delay))
-      } else {
-        timers.push(setTimeout(() => setVisibleBootLines(index + 1), line.delay))
+    const stored = localStorage.getItem(STORAGE_KEY)
+
+    if (stored) {
+      try {
+        const parsed: TerminalEntry[] = JSON.parse(stored)
+        setEntries(parsed)
+        setShowOptions(true)
+        setShowPrompt(true)
+      } catch (error) {
+        console.error('Failed to restore terminal history', error)
+        localStorage.removeItem(STORAGE_KEY)
+        runBootSequence()
       }
-    })
+    } else {
+      runBootSequence()
+    }
 
-    // Show ASCII art after LOAD command
-    timers.push(setTimeout(() => setShowAscii(true), 2000))
-
-    // Show menu items one by one
-    MENU_ITEMS.forEach((item, index) => {
-      timers.push(setTimeout(() => setVisibleMenuLines(index + 1), item.delay))
-    })
-
-    // Show command options
-    timers.push(setTimeout(() => setShowOptions(true), 5200))
-
-    // Show prompt
-    timers.push(setTimeout(() => setShowPrompt(true), 5800))
-
-    return () => timers.forEach(t => clearTimeout(t))
-  }, [])
+    return () => timersRef.current.forEach(t => clearTimeout(t))
+  }, [runBootSequence])
 
   // Auto-scroll to bottom
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [visibleBootLines, visibleMenuLines, showAscii, showOptions, showPrompt])
+  }, [entries, typingLine, typedChars, showOptions, showPrompt])
+
+  const handleCommand = useCallback(
+    async (cmd: string) => {
+      if (!showPrompt || isProcessing) return
+
+      const trimmed = cmd.trim()
+
+      if (trimmed === '1') {
+        setIsProcessing(true)
+        appendEntry({
+          id: `cmd-1-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [1] VIEW PREVIOUS FLIGHTS',
+        })
+        await sleep(200)
+
+        const frames = ['/', '-', '\\', '|']
+        for (let i = 0; i < 8; i++) {
+          appendEntry({
+            id: `load-frame-${i}-${Date.now()}`,
+            kind: 'text',
+            text: `LOADING FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 4) + 1)}`,
+          })
+          await sleep(160)
+        }
+
+        appendEntry({
+          id: `flight-available-${Date.now()}`,
+          kind: 'text',
+          text: 'AVAILABLE ARCHIVES: 2024 / SANTA GLOBAL RUN',
+        })
+
+        appendEntry({
+          id: `ready-${Date.now()}`,
+          kind: 'text',
+          text: 'ARCHIVE READY. OPENING 2024 MISSION...'
+        })
+
+        await sleep(260)
+        router.push('/map')
+      } else if (trimmed) {
+        appendEntry({
+          id: `unknown-${Date.now()}`,
+          kind: 'text',
+          text: `UNKNOWN COMMAND: ${trimmed}`,
+        })
+      }
+
+      setUserInput('')
+      setIsProcessing(false)
+    },
+    [appendEntry, isProcessing, router, showPrompt, sleep],
+  )
 
   // Keyboard input handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!showPrompt) return
-      
+
       if (e.key === 'Enter') {
-        // Execute command
-        const cmd = userInput.trim()
-        if (cmd === '1') {
-          router.push('/map')
-        }
-        setUserInput('')
+        handleCommand(userInput)
       } else if (e.key === 'Backspace') {
         setUserInput(prev => prev.slice(0, -1))
       } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        // Only allow single character inputs (letters, numbers)
         setUserInput(prev => prev + e.key.toUpperCase())
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showPrompt, userInput, router])
+  }, [handleCommand, showPrompt, userInput])
 
   return (
     <div className="w-full h-screen bg-black overflow-hidden relative">
@@ -211,30 +344,46 @@ export default function Home() {
       <div className="absolute inset-0 pointer-events-none z-10 animate-flicker opacity-[0.02] bg-white" />
 
       {/* Main content */}
-      <div 
+      <div
         ref={containerRef}
         className="relative z-0 w-full h-full overflow-auto p-4 sm:p-8 font-mono pb-16"
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.5), 0 0 20px rgba(51, 255, 51, 0.3)',
         }}
       >
-        {/* Boot sequence */}
+        {/* Terminal stream */}
         <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
-          {BOOT_SEQUENCE.slice(0, visibleBootLines).map((line, index) => (
-            <div key={index} className="min-h-[1.5em]">
-              {typingLine === index ? (
-                <span>
-                  {line.text.slice(0, typedChars)}
-                  <span className={cursorVisible ? 'opacity-100' : 'opacity-0'}>█</span>
-                </span>
-              ) : (
-                line.text
-              )}
-            </div>
-          ))}
-          
-          {/* Show cursor while typing command */}
-          {typingLine !== null && visibleBootLines === typingLine && (
+          {entries.map(entry => {
+            if (entry.kind === 'hr') {
+              return (
+                <div key={entry.id} className="min-h-[1.5em] w-full">
+                  <hr className="border-0 border-t border-[#33ff33] opacity-70 w-full" />
+                </div>
+              )
+            }
+
+            if (entry.kind === 'ascii') {
+              return (
+                <pre
+                  key={entry.id}
+                  className="text-[#33ff33] text-[6px] sm:text-[8px] md:text-[10px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
+                  style={{
+                    textShadow: '0 0 10px rgba(51, 255, 51, 0.9), 0 0 20px rgba(51, 255, 51, 0.6), 0 0 40px rgba(51, 255, 51, 0.4)',
+                  }}
+                >
+                  {entry.text ?? ASCII_TITLE}
+                </pre>
+              )
+            }
+
+            return (
+              <div key={entry.id} className="min-h-[1.5em]">
+                {entry.text}
+              </div>
+            )
+          })}
+
+          {typingLine !== null && (
             <div className="min-h-[1.5em]">
               <span>
                 {BOOT_SEQUENCE[typingLine].text.slice(0, typedChars)}
@@ -244,33 +393,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* ASCII Art Title */}
-        {showAscii && (
-          <pre 
-            className="text-[#33ff33] text-[6px] sm:text-[8px] md:text-[10px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
-            style={{
-              textShadow: '0 0 10px rgba(51, 255, 51, 0.9), 0 0 20px rgba(51, 255, 51, 0.6), 0 0 40px rgba(51, 255, 51, 0.4)',
-            }}
-          >
-            {ASCII_TITLE}
-          </pre>
-        )}
-
-        {/* Menu Items */}
-        {showAscii && (
-          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
-            {MENU_ITEMS.slice(0, visibleMenuLines).map((item, index) => (
-              <div key={index} className="min-h-[1.5em] w-full">
-                {item.type === 'hr' ? (
-                  <hr className="border-0 border-t border-[#33ff33] opacity-70 w-full" />
-                ) : (
-                  item.text
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Command Options */}
         {showOptions && (
           <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
@@ -279,18 +401,20 @@ export default function Home() {
             </div>
             <div className="mt-2">
               {COMMAND_OPTIONS.map((option, index) => (
-                <div 
+                <div
                   key={option.key}
                   className="animate-fadeIn min-h-[1.5em]"
                   style={{ animationDelay: `${index * 0.2}s` }}
                 >
                   {option.href !== '#' ? (
-                    <Link 
-                      href={option.href}
+                    <button
+                      type="button"
+                      onClick={() => handleCommand(option.key)}
                       className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
+                      disabled={isProcessing}
                     >
                       [{option.key}] {option.label}
-                    </Link>
+                    </button>
                   ) : (
                     <span className="opacity-50 cursor-not-allowed">
                       [{option.key}] {option.label}
