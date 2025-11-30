@@ -275,7 +275,7 @@ export default function Home() {
         {showOptions && (
           <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
             <div className="animate-fadeIn">
-              ENTER COMMAND:
+              Click, tap or enter command to continue:
             </div>
             <div className="mt-2">
               {COMMAND_OPTIONS.map((option, index) => (
