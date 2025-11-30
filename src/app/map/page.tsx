@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -8,20 +9,42 @@ import dynamic from 'next/dynamic'
 const RadarMap = dynamic(() => import('@/components/RadarMap'), {
   ssr: false,
   loading: () => (
-    <div className="absolute inset-0 flex items-center justify-center bg-black">
-      <div className="text-green-400 font-mono text-sm animate-pulse">
-        INITIALIZING RADAR SYSTEMS...
+    <div 
+      className="absolute inset-0 flex items-center justify-center bg-black font-mono"
+      style={{
+        textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
+      }}
+    >
+      <div className="text-sm space-y-1">
+        <div className="text-[#33ff33] animate-pulse">Accessing NORAD mainframe...</div>
+        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.2s' }}>连接中国卫星网络...</div>
+        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.4s' }}>Подключение к российской системе...</div>
+        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.6s' }}>Bypassing security protocols...</div>
+        <div className="mt-4 text-[#33ff33]/60">SYSTEM STATUS........ STANDBY</div>
+        <div className="text-[#33ff33]/60">SANTA ACTIVITY....... NOT DETECTED</div>
       </div>
     </div>
   ),
 })
 
 export default function MapPage() {
+  const router = useRouter()
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // ESC key to go back
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        router.push('/')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [router])
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden">
@@ -79,48 +102,54 @@ export default function MapPage() {
       </div>
 
       {/* Map container with scrubber */}
-      <div 
-        className="absolute inset-0"
-        style={{
-          filter: 'sepia(15%) saturate(120%) hue-rotate(45deg) brightness(0.95)',
-        }}
-      >
+      <div className="absolute inset-0">
         {isClient && <RadarMap dataFile="/test-flight-1.csv" />}
       </div>
 
       {/* Header */}
-      <header className="absolute top-0 left-0 right-0 z-20 p-6 pointer-events-none">
+      <header 
+        className="absolute top-0 left-0 right-0 z-20 p-4 pointer-events-none font-mono"
+        style={{
+          textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
+        }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 pointer-events-auto">
             <Link 
               href="/"
-              className="flex items-center gap-2 text-green-400/80 hover:text-green-400 transition-colors font-mono text-sm"
+              className="text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black transition-colors text-xs px-2 py-1 border border-[#33ff33]/50"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              BACK
+              [ESC] BACK
             </Link>
-            <div className="w-px h-4 bg-green-500/30" />
-            <h1 className="text-green-400 font-mono text-lg tracking-widest">
-              SANTA TRACKER // RADAR
+            <span className="text-[#33ff33]/30">│</span>
+            <h1 className="text-[#33ff33] text-sm tracking-wider">
+              SANTA TRACKER // RADAR MODULE
             </h1>
+            <span className="text-[#33ff33]/40 text-xs">v0.1</span>
           </div>
           
-          <div className="flex items-center gap-4 text-green-400/60 font-mono text-xs">
+          <div className="flex items-center gap-4 text-[#33ff33]/60 text-xs">
             <span className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="animate-pulse">●</span>
               SYSTEM ONLINE
             </span>
           </div>
         </div>
       </header>
 
-      {/* Corner decorations */}
-      <div className="absolute top-4 left-4 w-16 h-16 border-l-2 border-t-2 border-green-500/30 z-20 pointer-events-none" />
-      <div className="absolute top-4 right-4 w-16 h-16 border-r-2 border-t-2 border-green-500/30 z-20 pointer-events-none" />
-      <div className="absolute bottom-4 left-4 w-16 h-16 border-l-2 border-b-2 border-green-500/30 z-20 pointer-events-none" />
-      <div className="absolute bottom-4 right-4 w-16 h-16 border-r-2 border-b-2 border-green-500/30 z-20 pointer-events-none" />
+      {/* Corner decorations - terminal style */}
+      <div className="absolute top-12 left-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
+        ┌──
+      </div>
+      <div className="absolute top-12 right-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
+        ──┐
+      </div>
+      <div className="absolute bottom-4 left-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
+        └──
+      </div>
+      <div className="absolute bottom-4 right-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
+        ──┘
+      </div>
     </div>
   )
 }

@@ -64,3 +64,44 @@ body {
 .animate-scan-beam {
   animation: scan-beam 8s ease-in-out infinite;
 }
+
+/* C64 style fadeIn animation */
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.15s ease-out forwards;
+}
+
+/* CRT flicker effect */
+@keyframes flicker {
+  0%, 100% {
+    opacity: 0.02;
+  }
+  50% {
+    opacity: 0.04;
+  }
+  52% {
+    opacity: 0.01;
+  }
+  54% {
+    opacity: 0.03;
+  }
+}
+
+.animate-flicker {
+  animation: flicker 0.15s infinite;
+}
+
+/* Hide Leaflet attribution and controls */
+.leaflet-control-attribution,
+.leaflet-control-zoom,
+.leaflet-control-container {
+  display: none !important;
+}

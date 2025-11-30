@@ -1,110 +1,317 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState, useRef } from 'react'
+
+const ASCII_TITLE = `
+ ███████╗ █████╗ ███╗   ██╗████████╗ █████╗ 
+ ██╔════╝██╔══██╗████╗  ██║╚══██╔══╝██╔══██╗
+ ███████╗███████║██╔██╗ ██║   ██║   ███████║
+ ╚════██║██╔══██║██║╚██╗██║   ██║   ██╔══██║
+ ███████║██║  ██║██║ ╚████║   ██║   ██║  ██║
+ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝
+                                            
+ ████████╗██████╗  █████╗  ██████╗██╗  ██╗███████╗██████╗ 
+ ╚══██╔══╝██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗
+    ██║   ██████╔╝███████║██║     █████╔╝ █████╗  ██████╔╝
+    ██║   ██╔══██╗██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗
+    ██║   ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║
+    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+`
+
+interface BootLine {
+  text: string
+  delay: number
+  isCommand?: boolean
+}
+
+interface MenuItem {
+  text: string
+  delay: number
+}
+
+interface CommandOption {
+  key: string
+  label: string
+  href: string
+  delay: number
+}
+
+const BOOT_SEQUENCE: BootLine[] = [
+  { text: '**** NORTH POLE COMPUTING C64 ****', delay: 0 },
+  { text: '', delay: 100 },
+  { text: '64K RAM SYSTEM  38911 BASIC BYTES FREE', delay: 200 },
+  { text: '', delay: 300 },
+  { text: 'READY.', delay: 500 },
+  { text: 'LOAD "SANTA_TRACKER",8,1', delay: 800, isCommand: true },
+]
+
+const MENU_ITEMS: MenuItem[] = [
+  { text: '════════════════════════════════════════════════════', delay: 2200 },
+  { text: '', delay: 2300 },
+  { text: '    GLOBAL SANTA TRACKING SYSTEM v0.1', delay: 2400 },
+  { text: '', delay: 2600 },
+  { text: '════════════════════════════════════════════════════', delay: 2700 },
+  { text: '', delay: 2800 },
+  { text: '    Accessing NORAD mainframe...', delay: 3000 },
+  { text: '    连接中国卫星网络...', delay: 3300 },
+  { text: '    Подключение к российской системе...', delay: 3600 },
+  { text: '    Bypassing security protocols...', delay: 3900 },
+  { text: '', delay: 4200 },
+  { text: '    SYSTEM STATUS........ STANDBY', delay: 4400 },
+  { text: '    SANTA ACTIVITY....... NOT DETECTED', delay: 4600 },
+  { text: '', delay: 4800 },
+  { text: '════════════════════════════════════════════════════', delay: 4900 },
+  { text: '', delay: 5000 },
+]
+
+const COMMAND_OPTIONS: CommandOption[] = [
+  { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5200 },
+  { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5400 },
+]
 
 export default function Home() {
-  return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0c1524] via-[#1a2744] to-[#0c1524]" />
-      
-      {/* Stars */}
-      <div className="absolute inset-0">
-        {[...Array(50)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 bg-white rounded-full opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 60}%`,
-              animationDelay: `${Math.random() * 2}s`,
-            }}
-          />
-        ))}
-      </div>
+  const router = useRouter()
+  const [visibleBootLines, setVisibleBootLines] = useState<number>(0)
+  const [visibleMenuLines, setVisibleMenuLines] = useState<number>(0)
+  const [showAscii, setShowAscii] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
+  const [showPrompt, setShowPrompt] = useState(false)
+  const [cursorVisible, setCursorVisible] = useState(true)
+  const [currentTime, setCurrentTime] = useState('')
+  const [typingLine, setTypingLine] = useState<number | null>(null)
+  const [typedChars, setTypedChars] = useState(0)
+  const [userInput, setUserInput] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
 
-      {/* Snowflakes */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="snowflake absolute text-white/40 text-2xl"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDuration: `${8 + Math.random() * 7}s`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          >
-            ❄
-          </div>
-        ))}
-      </div>
+  // Cursor blink effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCursorVisible(v => !v)
+    }, 530)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Clock
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date()
+      setCurrentTime(now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC')
+    }
+    updateTime()
+    const interval = setInterval(updateTime, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Boot sequence animation
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = []
+
+    // Animate boot sequence lines
+    BOOT_SEQUENCE.forEach((line, index) => {
+      if (line.isCommand) {
+        // Typewriter effect for commands
+        timers.push(setTimeout(() => {
+          setTypingLine(index)
+          setTypedChars(0)
+          const chars = line.text.length
+          for (let i = 0; i <= chars; i++) {
+            timers.push(setTimeout(() => setTypedChars(i), i * 50))
+          }
+          timers.push(setTimeout(() => {
+            setTypingLine(null)
+            setVisibleBootLines(index + 1)
+          }, chars * 50 + 200))
+        }, line.delay))
+      } else {
+        timers.push(setTimeout(() => setVisibleBootLines(index + 1), line.delay))
+      }
+    })
+
+    // Show ASCII art after LOAD command
+    timers.push(setTimeout(() => setShowAscii(true), 2000))
+
+    // Show menu items one by one
+    MENU_ITEMS.forEach((item, index) => {
+      timers.push(setTimeout(() => setVisibleMenuLines(index + 1), item.delay))
+    })
+
+    // Show command options
+    timers.push(setTimeout(() => setShowOptions(true), 5200))
+
+    // Show prompt
+    timers.push(setTimeout(() => setShowPrompt(true), 5800))
+
+    return () => timers.forEach(t => clearTimeout(t))
+  }, [])
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [visibleBootLines, visibleMenuLines, showAscii, showOptions, showPrompt])
+
+  // Keyboard input handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showPrompt) return
+      
+      if (e.key === 'Enter') {
+        // Execute command
+        const cmd = userInput.trim()
+        if (cmd === '1') {
+          router.push('/map')
+        }
+        setUserInput('')
+      } else if (e.key === 'Backspace') {
+        setUserInput(prev => prev.slice(0, -1))
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        // Only allow single character inputs (letters, numbers)
+        setUserInput(prev => prev + e.key.toUpperCase())
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showPrompt, userInput, router])
+
+  return (
+    <div className="w-full h-screen bg-black overflow-hidden relative">
+      {/* CRT screen curvature effect */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-20"
+        style={{
+          background: 'radial-gradient(ellipse at center, transparent 0%, transparent 70%, rgba(0,0,0,0.4) 100%)',
+          boxShadow: 'inset 0 0 100px rgba(0,0,0,0.5)',
+        }}
+      />
+
+      {/* Scan lines */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-10 opacity-[0.08]"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 0, 0, 0.8) 2px, rgba(0, 0, 0, 0.8) 4px)',
+        }}
+      />
+
+      {/* Green phosphor glow */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-10 opacity-30"
+        style={{
+          background: 'radial-gradient(ellipse at center, rgba(51, 255, 51, 0.1) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Flicker effect */}
+      <div className="absolute inset-0 pointer-events-none z-10 animate-flicker opacity-[0.02] bg-white" />
 
       {/* Main content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-12">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-6xl md:text-8xl font-bold tracking-tight mb-4">
-            <span className="text-accent-red">Santa</span>
-            <span className="text-accent-snow"> Tracker</span>
-          </h1>
-          <p className="text-xl text-accent-snow/70 font-light tracking-wide">
-            Follow Santa&apos;s magical journey around the world
-          </p>
-        </div>
-
-        {/* Status Card */}
-        <div className="w-full max-w-lg bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-8 shadow-2xl">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-semibold text-accent-gold">Live Status</h2>
-            <span className="flex items-center gap-2 text-accent-red">
-              <span className="w-2 h-2 bg-accent-red rounded-full" />
-              No activity
-            </span>
-          </div>
-
-          {/* Current Location Display */}
-          <div className="mb-6">
-            <label className="block text-sm text-accent-snow/60 mb-2">Current Location</label>
-            <div className="w-full flex items-center bg-white/10 rounded-xl px-4 py-3">
-              <span className="flex items-center gap-3">
-                <span className="text-2xl">🎅</span>
-                <span>North Pole</span>
+      <div 
+        ref={containerRef}
+        className="relative z-0 w-full h-full overflow-auto p-4 sm:p-8 font-mono pb-16"
+        style={{
+          textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.5), 0 0 20px rgba(51, 255, 51, 0.3)',
+        }}
+      >
+        {/* Boot sequence */}
+        <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
+          {BOOT_SEQUENCE.slice(0, visibleBootLines).map((line, index) => (
+            <div key={index} className="min-h-[1.5em]">
+              {typingLine === index ? (
+                <span>
+                  {line.text.slice(0, typedChars)}
+                  <span className={cursorVisible ? 'opacity-100' : 'opacity-0'}>█</span>
+                </span>
+              ) : (
+                line.text
+              )}
+            </div>
+          ))}
+          
+          {/* Show cursor while typing command */}
+          {typingLine !== null && visibleBootLines === typingLine && (
+            <div className="min-h-[1.5em]">
+              <span>
+                {BOOT_SEQUENCE[typingLine].text.slice(0, typedChars)}
+                <span className={cursorVisible ? 'opacity-100' : 'opacity-0'}>█</span>
               </span>
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-3xl font-bold text-accent-gold">2.4B</div>
-              <div className="text-sm text-accent-snow/60">Gifts Delivered</div>
-            </div>
-            <div className="bg-white/5 rounded-xl p-4">
-              <div className="text-3xl font-bold text-accent-red">847M</div>
-              <div className="text-sm text-accent-snow/60">Miles Traveled</div>
-            </div>
-          </div>
-
-          {/* Action Button - Links to Map */}
-          <Link
-            href="/map"
-            className="block w-full text-center bg-gradient-to-r from-accent-red to-accent-red/80 hover:from-accent-red/90 hover:to-accent-red/70 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 shadow-lg shadow-accent-red/20"
+        {/* ASCII Art Title */}
+        {showAscii && (
+          <pre 
+            className="text-[#33ff33] text-[6px] sm:text-[8px] md:text-[10px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
+            style={{
+              textShadow: '0 0 10px rgba(51, 255, 51, 0.9), 0 0 20px rgba(51, 255, 51, 0.6), 0 0 40px rgba(51, 255, 51, 0.4)',
+            }}
           >
-            View Previous Flights
-          </Link>
-        </div>
+            {ASCII_TITLE}
+          </pre>
+        )}
 
-        {/* Tech Stack Badge */}
-        <div className="mt-12 flex items-center gap-3 text-sm text-accent-snow/40">
-          <span>Built with</span>
-          <span className="px-3 py-1 bg-white/5 rounded-full">Next.js</span>
-          <span className="px-3 py-1 bg-white/5 rounded-full">Tailwind</span>
-          <span className="px-3 py-1 bg-white/5 rounded-full">Headless UI</span>
-          <span className="px-3 py-1 bg-white/5 rounded-full">Supabase</span>
-        </div>
+        {/* Menu Items */}
+        {showAscii && (
+          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
+            {MENU_ITEMS.slice(0, visibleMenuLines).map((item, index) => (
+              <div key={index} className="min-h-[1.5em]">
+                {item.text}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Command Options */}
+        {showOptions && (
+          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
+            <div className="animate-fadeIn">
+              ENTER COMMAND:
+            </div>
+            <div className="mt-2">
+              {COMMAND_OPTIONS.map((option, index) => (
+                <div 
+                  key={option.key}
+                  className="animate-fadeIn min-h-[1.5em]"
+                  style={{ animationDelay: `${index * 0.2}s` }}
+                >
+                  {option.href !== '#' ? (
+                    <Link 
+                      href={option.href}
+                      className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
+                    >
+                      [{option.key}] {option.label}
+                    </Link>
+                  ) : (
+                    <span className="opacity-50 cursor-not-allowed">
+                      [{option.key}] {option.label}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Input prompt */}
+        {showPrompt && (
+          <div className="mt-6 text-[#33ff33] text-sm sm:text-base animate-fadeIn">
+            <span>READY. </span>
+            <span>{userInput}</span>
+            <span className={cursorVisible ? 'opacity-100' : 'opacity-0'}>█</span>
+          </div>
+        )}
+
+        {/* Bottom padding for scroll */}
+        <div className="h-20" />
       </div>
 
+      {/* Status bar at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-[#33ff33] text-black px-4 py-1 font-mono text-xs flex justify-end">
+        <span>{currentTime}</span>
+      </div>
     </div>
   )
 }
