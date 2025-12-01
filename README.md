@@ -21,19 +21,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `/` | Home — Santa status dashboard |
 | `/map` | Radar Map — Retro green radar-style world map |
 
-## Environment Variables
-
-Create a `.env.local` file in the root directory:
-
-```env
-# Mapbox (optional - falls back to CARTO tiles)
-NEXT_PUBLIC_MAPBOX_TOKEN=your_mapbox_public_token
-
-# Supabase (optional - only needed for donations)
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
 ## Tech Stack
 
 - **Next.js 16** — React framework with App Router
