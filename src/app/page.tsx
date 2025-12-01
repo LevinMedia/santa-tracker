@@ -413,7 +413,7 @@ export default function Home() {
             <div className="animate-fadeIn">
               Click, tap or enter command to continue:
             </div>
-            <div className="mt-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 max-w-xl">
               {COMMAND_OPTIONS.map((option, index) => (
                 <div
                   key={option.key}
@@ -424,15 +424,17 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => handleCommand(option.key)}
-                      className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
+                      className="w-full text-left border border-[#33ff33] px-3 py-2 tracking-[0.2em] uppercase transition-colors duration-150 bg-black text-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)]"
                       disabled={isProcessing}
                     >
-                      [{option.key}] {option.label}
+                      <span className="font-semibold">{option.key} ▓</span>
+                      <span className="ml-3">{option.label}</span>
                     </button>
                   ) : (
-                    <span className="opacity-50 cursor-not-allowed">
-                      [{option.key}] {option.label}
-                    </span>
+                    <div className="w-full text-left border border-dashed border-[#33ff33]/50 px-3 py-2 tracking-[0.2em] uppercase opacity-50 cursor-not-allowed bg-black/50">
+                      <span className="font-semibold">{option.key} ▓</span>
+                      <span className="ml-3">{option.label}</span>
+                    </div>
                   )}
                 </div>
               ))}
