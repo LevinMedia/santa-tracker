@@ -413,27 +413,26 @@ export default function Home() {
             <div className="animate-fadeIn">
               Click, tap or enter command to continue:
             </div>
-            <div className="mt-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 max-w-xl">
               {COMMAND_OPTIONS.map((option, index) => (
                 <div
                   key={option.key}
                   className="animate-fadeIn min-h-[1.5em]"
                   style={{ animationDelay: `${index * 0.2}s` }}
                 >
-                  {option.href !== '#' ? (
-                    <button
-                      type="button"
-                      onClick={() => handleCommand(option.key)}
-                      className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
-                      disabled={isProcessing}
-                    >
-                      [{option.key}] {option.label}
-                    </button>
-                  ) : (
-                    <span className="opacity-50 cursor-not-allowed">
-                      [{option.key}] {option.label}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => option.href !== '#' && handleCommand(option.key)}
+                    className={`w-full text-left px-3 py-2 tracking-[0.2em] uppercase transition-colors duration-150 bg-black text-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] ${
+                      option.href === '#'
+                        ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed hover:bg-black hover:text-[#33ff33]'
+                        : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                    }`}
+                    disabled={isProcessing || option.href === '#'}
+                  >
+                    <span className="font-semibold">{option.key} ▓</span>
+                    <span className="ml-3">{option.label}</span>
+                  </button>
                 </div>
               ))}
             </div>
