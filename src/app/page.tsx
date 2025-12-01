@@ -449,7 +449,7 @@ export default function Home() {
               return (
                 <pre
                   key={entry.id}
-                  className="text-[#33ff33] text-[1.7vw] sm:text-[8px] md:text-[10px] lg:text-[12px] xl:text-[14px] 2xl:text-[16px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
+                  className="text-[#33ff33] text-[2.3vw] sm:text-[8px] md:text-[10px] lg:text-[12px] xl:text-[14px] 2xl:text-[16px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
                   style={{
                     textShadow: '0 0 10px rgba(51, 255, 51, 0.9), 0 0 20px rgba(51, 255, 51, 0.6), 0 0 40px rgba(51, 255, 51, 0.4)',
                   }}
