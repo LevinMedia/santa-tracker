@@ -81,6 +81,7 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
+  { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
   { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
   { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
@@ -535,6 +536,10 @@ export default function Home() {
               const isActiveOptions = entry.id === activeOptionsId
               return (
                 <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
+                  <p className="mb-4">
+                    2025 Santa Tracker will activate on or around December 25th, 2025. Check back on Christmas Eve. This Christmas,
+                    consider giving the gift of life. Donate to St Jude’s children’s hospital.
+                  </p>
                   <div>Click, tap or enter command to continue:</div>
                   <div className="mt-3 flex flex-col gap-2">
                     {COMMAND_OPTIONS.map((option, index) => (
