@@ -2,6 +2,7 @@
 
 // Santa Tracker v0.1 - Trigger redeploy
 
+import { Button } from '@headlessui/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 
@@ -420,22 +421,19 @@ export default function Home() {
                   className="animate-fadeIn min-h-[1.5em]"
                   style={{ animationDelay: `${index * 0.2}s` }}
                 >
-                  {option.href !== '#' ? (
-                    <button
-                      type="button"
-                      onClick={() => handleCommand(option.key)}
-                      className="w-full text-left border border-[#33ff33] px-3 py-2 tracking-[0.2em] uppercase transition-colors duration-150 bg-black text-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)]"
-                      disabled={isProcessing}
-                    >
-                      <span className="font-semibold">{option.key} ▓</span>
-                      <span className="ml-3">{option.label}</span>
-                    </button>
-                  ) : (
-                    <div className="w-full text-left border border-dashed border-[#33ff33]/50 px-3 py-2 tracking-[0.2em] uppercase opacity-50 cursor-not-allowed bg-black/50">
-                      <span className="font-semibold">{option.key} ▓</span>
-                      <span className="ml-3">{option.label}</span>
-                    </div>
-                  )}
+                  <Button
+                    type="button"
+                    onClick={() => handleCommand(option.key)}
+                    disabled={option.href === '#' || isProcessing}
+                    className="group relative w-full overflow-hidden text-left border px-4 py-3 tracking-[0.18em] uppercase transition duration-200 bg-black text-[#33ff33] border-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] hover:bg-[#33ff33] hover:text-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#33ff33] focus-visible:shadow-[0_0_18px_rgba(51,255,51,0.5)] active:translate-y-[1px] active:shadow-[0_0_10px_rgba(51,255,51,0.35)] disabled:cursor-not-allowed disabled:border-dashed disabled:border-[#33ff33]/50 disabled:text-[#33ff33]/60 disabled:bg-black/40 disabled:shadow-none flex items-center"
+                  >
+                    <span className="font-semibold tracking-[0.24em]">{option.key} ▓</span>
+                    <span className="ml-3 block text-sm sm:text-base tracking-[0.15em]">
+                      {option.label}
+                      {option.href === '#' && ' (Unavailable)'}
+                    </span>
+                    <span className="pointer-events-none absolute inset-0 opacity-0 transition duration-200 mix-blend-screen group-hover:opacity-30 group-focus-visible:opacity-40" aria-hidden />
+                  </Button>
                 </div>
               ))}
             </div>
