@@ -1,8 +1,6 @@
 'use client'
 
-import { MapContainer, TileLayer, CircleMarker, Polyline, useMap } from 'react-leaflet'
-import 'leaflet/dist/leaflet.css'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 
 interface FlightStop {
   stop_number: number
@@ -12,10 +10,10 @@ interface FlightStop {
   lng: number
   utc_time: string
   local_time: string
-  timestamp: number // Unix timestamp in ms
+  timestamp: number
 }
 
-interface RadarMapProps {
+interface GlobeMapProps {
   dataFile?: string
 }
 
@@ -46,63 +44,6 @@ function parseUTCTime(timeStr: string): number {
   return date.getTime()
 }
 
-// Great circle interpolation between two coordinates
-function interpolateGreatCircle(
-  start: { lat: number; lng: number },
-  end: { lat: number; lng: number },
-  progress: number
-): [number, number] {
-  // Convert to radians
-  const lat1 = start.lat * Math.PI / 180
-  const lng1 = start.lng * Math.PI / 180
-  const lat2 = end.lat * Math.PI / 180
-  const lng2 = end.lng * Math.PI / 180
-  
-  // Calculate angular distance (central angle)
-  const d = Math.acos(
-    Math.sin(lat1) * Math.sin(lat2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1)
-  )
-  
-  // Handle very small distances (essentially same point)
-  if (d < 0.0001) {
-    return [start.lat, start.lng]
-  }
-  
-  // Spherical interpolation (slerp)
-  const a = Math.sin((1 - progress) * d) / Math.sin(d)
-  const b = Math.sin(progress * d) / Math.sin(d)
-  
-  // Calculate 3D cartesian coordinates
-  const x = a * Math.cos(lat1) * Math.cos(lng1) + b * Math.cos(lat2) * Math.cos(lng2)
-  const y = a * Math.cos(lat1) * Math.sin(lng1) + b * Math.cos(lat2) * Math.sin(lng2)
-  const z = a * Math.sin(lat1) + b * Math.sin(lat2)
-  
-  // Convert back to lat/lng
-  const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) * 180 / Math.PI
-  const lng = Math.atan2(y, x) * 180 / Math.PI
-  
-  return [lat, lng]
-}
-
-// Generate points along a great circle arc for smooth rendering
-function getGreatCircleArc(
-  start: { lat: number; lng: number },
-  end: { lat: number; lng: number },
-  progress: number,
-  numPoints: number = 20
-): [number, number][] {
-  const points: [number, number][] = []
-  
-  // Add points from start to current progress position
-  for (let i = 0; i <= numPoints; i++) {
-    const t = (i / numPoints) * progress
-    points.push(interpolateGreatCircle(start, end, t))
-  }
-  
-  return points
-}
-
 // Format duration in human readable
 function formatDuration(ms: number): string {
   const hours = Math.floor(ms / 3600000)
@@ -117,54 +58,6 @@ function formatDuration(ms: number): string {
   return `${seconds}s`
 }
 
-// Calculate shortest longitude difference accounting for date line
-function getLngDiff(from: number, to: number): number {
-  let diff = to - from
-  // Normalize to -180 to 180
-  while (diff > 180) diff -= 360
-  while (diff < -180) diff += 360
-  return diff
-}
-
-// Check if crossing the date line (points on opposite sides near ±180)
-function isCrossingDateLine(from: number, to: number): boolean {
-  return (from > 150 && to < -150) || (from < -150 && to > 150)
-}
-
-// Component to center map on current stop (horizontal only)
-function MapController({ currentStop }: { currentStop: FlightStop | null }) {
-  const map = useMap()
-  const lastLng = useRef<number>(0)
-  
-  useEffect(() => {
-    if (currentStop) {
-      const currentCenter = map.getCenter()
-      const lngDiff = getLngDiff(lastLng.current, currentStop.lng)
-      
-      // Skip panning if crossing the date line - let worldCopyJump handle it
-      if (isCrossingDateLine(lastLng.current, currentStop.lng)) {
-        lastLng.current = currentStop.lng
-        return
-      }
-      
-      // Only pan if moved significantly (using shortest path distance)
-      if (Math.abs(lngDiff) > 5) {
-        // Calculate target longitude relative to current view (may be outside -180/180)
-        const targetLng = currentCenter.lng + getLngDiff(currentCenter.lng, currentStop.lng)
-        
-        map.panTo([currentCenter.lat, targetLng], { 
-          animate: true, 
-          duration: 0.3,
-          noMoveStart: true 
-        })
-        lastLng.current = currentStop.lng
-      }
-    }
-  }, [currentStop, map])
-  
-  return null
-}
-
 const SPEED_OPTIONS = [
   { value: 1, label: '1x' },
   { value: 2, label: '2x' },
@@ -173,7 +66,58 @@ const SPEED_OPTIONS = [
   { value: 300, label: 'MAX' },
 ]
 
-export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapProps) {
+// Interpolate position along great circle arc
+function interpolateGreatCircle(
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number },
+  progress: number
+): { lat: number; lng: number } {
+  // Convert to radians
+  const lat1 = start.lat * Math.PI / 180
+  const lng1 = start.lng * Math.PI / 180
+  const lat2 = end.lat * Math.PI / 180
+  const lng2 = end.lng * Math.PI / 180
+  
+  // Calculate angular distance
+  const d = Math.acos(
+    Math.sin(lat1) * Math.sin(lat2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1)
+  )
+  
+  if (d < 0.0001) return start
+  
+  // Spherical interpolation
+  const a = Math.sin((1 - progress) * d) / Math.sin(d)
+  const b = Math.sin(progress * d) / Math.sin(d)
+  
+  const x = a * Math.cos(lat1) * Math.cos(lng1) + b * Math.cos(lat2) * Math.cos(lng2)
+  const y = a * Math.cos(lat1) * Math.sin(lng1) + b * Math.cos(lat2) * Math.sin(lng2)
+  const z = a * Math.sin(lat1) + b * Math.sin(lat2)
+  
+  return {
+    lat: Math.atan2(z, Math.sqrt(x * x + y * y)) * 180 / Math.PI,
+    lng: Math.atan2(y, x) * 180 / Math.PI
+  }
+}
+
+// Calculate sun position (subsolar point) based on UTC time
+function getSunPosition(timestamp: number): { lat: number; lng: number } {
+  const date = new Date(timestamp)
+  
+  // Calculate solar declination (latitude where sun is directly overhead)
+  // Simplified formula - accurate enough for visualization
+  const dayOfYear = Math.floor((date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000)
+  const declination = -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * Math.PI / 180)
+  
+  // Calculate hour angle (longitude where sun is directly overhead)
+  // Based on UTC time - sun is at 0° longitude at 12:00 UTC
+  const hours = date.getUTCHours() + date.getUTCMinutes() / 60
+  const lng = (12 - hours) * 15 // 15° per hour, noon = 0°
+  
+  return { lat: declination, lng }
+}
+
+export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -181,26 +125,48 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
   const [playSpeed, setPlaySpeed] = useState(300)
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false)
   const [displayTime, setDisplayTime] = useState<string>('')
-  const [travelProgress, setTravelProgress] = useState(0) // 0-1 progress between current and next stop
+  const [travelProgress, setTravelProgress] = useState(0)
+  const [globeReady, setGlobeReady] = useState(false)
+  const [GlobeComponent, setGlobeComponent] = useState<any>(null)
+  const [currentSimTime, setCurrentSimTime] = useState<number>(0)
+  const [cameraAltitude, setCameraAltitude] = useState<number>(2)
+  
+  // Loading state
+  const [initialized, setInitialized] = useState(false)
   
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
   const playStartSimTime = useRef<number>(0)
   const animationFrame = useRef<number>(0)
   const speedMenuRef = useRef<HTMLDivElement>(null)
+  const globeRef = useRef<any>(null)
 
   // Mission timing
   const missionStart = stops.length > 0 ? stops[0].timestamp : 0
   const missionEnd = stops.length > 0 ? stops[stops.length - 1].timestamp : 0
   
-  // Playback time remaining
   const currentStopTime = stops[currentIndex]?.timestamp || missionStart
   const remainingMissionTime = missionEnd - currentStopTime
   const remainingPlaybackTime = remainingMissionTime / playSpeed
 
-  // Load flight data
+  // Load Globe component on client
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    import('react-globe.gl').then((mod) => {
+      setGlobeComponent(() => mod.default)
+    })
+  }, [])
+
+  // Point globe at North Pole when ready and load data
+  useEffect(() => {
+    if (globeReady && globeRef.current && !initialized) {
+      // Point at North Pole
+      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 5000)
+      setInitialized(true)
+    }
+  }, [globeReady, initialized])
+
+  // Load flight data in background
+  useEffect(() => {
     setLoading(true)
     fetch(dataFile)
       .then(res => res.text())
@@ -229,8 +195,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
         }
         
         setStops(data)
-        setIsPlaying(false)
-        setCurrentIndex(Math.max(0, data.length - 1))
+        setCurrentIndex(0) // Start at beginning, no points shown
         setLoading(false)
         console.log(`Loaded ${data.length} flight stops from ${dataFile}`)
       })
@@ -246,7 +211,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     return date.toISOString().replace('T', ' ').slice(0, 19)
   }, [])
 
-  // Real-time playback using timestamps
+  // Real-time playback
   useEffect(() => {
     if (!isPlaying || loading || stops.length === 0) return
     
@@ -259,8 +224,8 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
       const scaledElapsed = elapsed * playSpeed
       const targetMissionTime = playStartSimTime.current + scaledElapsed
       
-      // Update display time in real-time
       setDisplayTime(formatUTCTime(targetMissionTime))
+      setCurrentSimTime(targetMissionTime)
       
       let newIndex = currentIndex
       for (let i = playStartIndex.current; i < stops.length; i++) {
@@ -275,7 +240,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
         setCurrentIndex(newIndex)
       }
       
-      // Calculate travel progress between current and next stop
+      // Calculate travel progress
       if (newIndex < stops.length - 1) {
         const currentStopTs = stops[newIndex].timestamp
         const nextStopTs = stops[newIndex + 1].timestamp
@@ -304,7 +269,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     }
   }, [isPlaying, loading, stops, playSpeed, formatUTCTime])
 
-  // Update animation when speed changes during playback
+  // Update animation when speed changes
   useEffect(() => {
     if (isPlaying && stops.length > 0) {
       playStartTime.current = Date.now()
@@ -313,15 +278,108 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     }
   }, [playSpeed])
 
-  // Update display time when not playing (from current stop)
+  // Update display time when not playing
   useEffect(() => {
     if (!isPlaying && stops.length > 0 && stops[currentIndex]) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayTime(stops[currentIndex].utc_time)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTravelProgress(0) // Reset travel progress when paused
+      setTravelProgress(0)
+      setCurrentSimTime(stops[currentIndex].timestamp)
     }
   }, [isPlaying, currentIndex, stops])
+
+  // Track the animated edge tip (or current stop when paused)
+  // Only update lat/lng - let user control zoom freely
+  useEffect(() => {
+    if (!globeRef.current || !globeReady || !stops[currentIndex]) return
+    
+    const currentStop = stops[currentIndex]
+    const nextStop = currentIndex < stops.length - 1 ? stops[currentIndex + 1] : null
+    
+    let targetLat: number
+    let targetLng: number
+    
+    if (isPlaying && nextStop && travelProgress > 0) {
+      // Follow the tip of the animated edge
+      const interpolated = interpolateGreatCircle(currentStop, nextStop, travelProgress)
+      targetLat = interpolated.lat
+      targetLng = interpolated.lng
+    } else {
+      // When paused, center on current stop
+      targetLat = currentStop.lat
+      targetLng = currentStop.lng
+    }
+    
+    // Only set lat/lng, preserve user's altitude/zoom
+    const currentPov = globeRef.current.pointOfView()
+    globeRef.current.pointOfView(
+      { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? 2 }, 
+      isPlaying ? 0 : 300  // No animation during playback to avoid zoom fighting
+    )
+  }, [currentIndex, stops, globeReady, isPlaying, travelProgress])
+
+  // Track altitude changes from user zooming
+  const lastAltitudeRef = useRef(cameraAltitude)
+  useEffect(() => {
+    if (!globeRef.current || !globeReady) return
+    
+    const checkAltitude = () => {
+      const pov = globeRef.current?.pointOfView()
+      if (pov?.altitude && Math.abs(pov.altitude - lastAltitudeRef.current) > 0.1) {
+        lastAltitudeRef.current = pov.altitude
+        setCameraAltitude(pov.altitude)
+      }
+    }
+    
+    const interval = setInterval(checkAltitude, 200)
+    return () => clearInterval(interval)
+  }, [globeReady])
+
+  // Update sun lighting based on simulation time
+  useEffect(() => {
+    if (!globeRef.current || !globeReady || !currentSimTime) return
+    
+    const scene = globeRef.current.scene()
+    if (!scene) return
+    
+    // Find or create directional light
+    let sunLight = scene.getObjectByName('sunLight')
+    if (!sunLight) {
+      // Import THREE dynamically
+      import('three').then(({ DirectionalLight, AmbientLight }) => {
+        // Add ambient light for base illumination
+        const ambient = new AmbientLight(0x333333, 0.5)
+        ambient.name = 'ambientLight'
+        scene.add(ambient)
+        
+        // Add directional light for sun
+        const directional = new DirectionalLight(0xffffee, 1.5)
+        directional.name = 'sunLight'
+        scene.add(directional)
+        
+        // Position the sun
+        const sunPos = getSunPosition(currentSimTime)
+        const sunDistance = 200
+        const phi = (90 - sunPos.lat) * Math.PI / 180
+        const theta = (sunPos.lng + 180) * Math.PI / 180
+        directional.position.set(
+          sunDistance * Math.sin(phi) * Math.cos(theta),
+          sunDistance * Math.cos(phi),
+          sunDistance * Math.sin(phi) * Math.sin(theta)
+        )
+      })
+    } else {
+      // Update sun position
+      const sunPos = getSunPosition(currentSimTime)
+      const sunDistance = 200
+      const phi = (90 - sunPos.lat) * Math.PI / 180
+      const theta = (sunPos.lng + 180) * Math.PI / 180
+      sunLight.position.set(
+        sunDistance * Math.sin(phi) * Math.cos(theta),
+        sunDistance * Math.cos(phi),
+        sunDistance * Math.sin(phi) * Math.sin(theta)
+      )
+    }
+  }, [globeReady, currentSimTime])
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value)
@@ -337,6 +395,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
 
   const togglePlay = useCallback(() => {
     if (isAtEnd) {
+      // Reset for replay - wipe all points
       setCurrentIndex(0)
       setIsPlaying(true)
       return
@@ -344,7 +403,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     setIsPlaying(prev => !prev)
   }, [isAtEnd])
 
-  // Close speed menu when clicking outside
+  // Close speed menu on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (speedMenuRef.current && !speedMenuRef.current.contains(e.target as Node)) {
@@ -360,85 +419,138 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
   const currentStop = stops[currentIndex]
   const progress = stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0
 
+  // Prepare point data for visited stops
+  // Scale current marker size based on zoom level (altitude)
+  const currentMarkerSize = Math.max(0.1, Math.min(0.4, 0.4 * (cameraAltitude / 2)))
+  
+  // Only show visited stops - limit to MAX_POINTS for performance
+  const MAX_POINTS = 1000
+  const FADE_ZONE = 200 // Points in this range will fade out
+  
+  const visitedPoints = useMemo(() => {
+    const totalVisited = currentIndex + 1
+    const startIndex = Math.max(0, totalVisited - MAX_POINTS)
+    const visibleStops = stops.slice(startIndex, totalVisited)
+    
+    return visibleStops.map((stop, idx) => {
+      const isCurrentStop = stop.stop_number === currentStop?.stop_number
+      
+      // Calculate fade for oldest points in the window
+      let opacity = 1
+      if (totalVisited > MAX_POINTS && idx < FADE_ZONE) {
+        opacity = idx / FADE_ZONE // 0 at oldest, 1 at FADE_ZONE
+      }
+      
+      // Convert opacity to color with alpha
+      const baseColor = isCurrentStop ? '255, 255, 255' : '51, 255, 51'
+      
+      return {
+        lat: stop.lat,
+        lng: stop.lng,
+        size: isCurrentStop ? currentMarkerSize : 0.08,
+        color: `rgba(${baseColor}, ${opacity})`,
+      }
+    })
+  }, [stops, currentIndex, currentStop, currentMarkerSize])
+
+  
+  // Prepare arc data for travel animation (3D arcs through space)
+  const nextStop = currentIndex < stops.length - 1 ? stops[currentIndex + 1] : null
+  const prevStop = currentIndex > 0 ? stops[currentIndex - 1] : null
+  
+  // Calculate arc altitude based on distance
+  const calcArcAltitude = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const phi1 = lat1 * Math.PI / 180
+    const phi2 = lat2 * Math.PI / 180
+    const dLambda = (lng2 - lng1) * Math.PI / 180
+    
+    // Great circle angular distance
+    const angularDist = Math.acos(
+      Math.max(-1, Math.min(1, // Clamp for numerical stability
+        Math.sin(phi1) * Math.sin(phi2) +
+        Math.cos(phi1) * Math.cos(phi2) * Math.cos(dLambda)
+      ))
+    )
+    
+    // Convert to fraction of half-globe (0-1 for 0-180°)
+    const distFraction = angularDist / Math.PI
+    // Scale altitude: short hops = 0.05, half-globe = 0.6
+    return 0.05 + distFraction * 0.55
+  }, [])
+
+  const arcsData = useMemo(() => {
+    const arcs: Array<{
+      startLat: number
+      startLng: number
+      endLat: number
+      endLng: number
+      opacity: number
+      dashLength: number
+      altitude: number
+    }> = []
+    
+    // Current arc (animating in) - swap start/end so dash draws from current toward next
+    if (isPlaying && currentStop && nextStop && travelProgress > 0) {
+      arcs.push({
+        startLat: nextStop.lat,
+        startLng: nextStop.lng,
+        endLat: currentStop.lat,
+        endLng: currentStop.lng,
+        opacity: 1,
+        dashLength: travelProgress,
+        altitude: calcArcAltitude(currentStop.lat, currentStop.lng, nextStop.lat, nextStop.lng),
+      })
+    }
+    
+    // Previous arc (fading out)
+    if (isPlaying && currentStop && prevStop && travelProgress > 0 && travelProgress < 1) {
+      arcs.push({
+        startLat: currentStop.lat,
+        startLng: currentStop.lng,
+        endLat: prevStop.lat,
+        endLng: prevStop.lng,
+        opacity: 1 - travelProgress,
+        dashLength: 1,
+        altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
+      })
+    }
+    
+    return arcs
+  }, [isPlaying, currentStop, nextStop, prevStop, travelProgress, calcArcAltitude])
+
   return (
-    <div className="relative w-full h-full">
-      {/* Map with filter - only applies to map, not controls */}
-      <div 
-        className="absolute inset-0"
-        style={{
-          filter: 'sepia(15%) saturate(120%) hue-rotate(45deg) brightness(0.95)',
-        }}
-      >
-        <MapContainer
-          center={[25, 0]}
-          zoom={2.5}
-          style={{ height: '100%', width: '100%', background: '#000' }}
-          zoomControl={false}
-          attributionControl={false}
-          scrollWheelZoom={true}
-          doubleClickZoom={true}
-          dragging={true}
-          worldCopyJump={true}
-          minZoom={2}
-          maxZoom={6}
-        >
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+    <div className="relative w-full h-full bg-black">
+      {/* Globe - shifted up to account for bottom HUD */}
+      <div className="absolute inset-0" style={{ transform: 'translateY(-10%)' }}>
+        {GlobeComponent && (
+          <GlobeComponent
+            ref={globeRef}
+            width={typeof window !== 'undefined' ? window.innerWidth : 800}
+            height={typeof window !== 'undefined' ? window.innerHeight : 600}
+            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+            backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+            pointsData={visitedPoints}
+            pointLat="lat"
+            pointLng="lng"
+            pointColor="color"
+            pointRadius="size"
+            pointAltitude={0}
+            arcsData={arcsData}
+            arcStartLat="startLat"
+            arcStartLng="startLng"
+            arcEndLat="endLat"
+            arcEndLng="endLng"
+            arcColor={(d: any) => `rgba(51, 255, 51, ${d.opacity})`}
+            arcStroke={Math.max(0.3, Math.min(1.5, 1.5 * (cameraAltitude / 2)))}
+            arcAltitude={(d: any) => d.altitude}
+            arcDashLength={(d: any) => d.dashLength}
+            arcDashGap={2}
+            arcDashAnimateTime={0}
+            atmosphereColor="#33ff33"
+            atmosphereAltitude={0.15}
+            onGlobeReady={() => setGlobeReady(true)}
           />
-          
-          {/* Map controller to follow current stop */}
-          <MapController currentStop={currentStop} />
-          
-          {/* Only show visited stops - additive */}
-          {!loading && stops.slice(0, currentIndex + 1).map((stop) => (
-            <CircleMarker
-              key={`visited-${stop.stop_number}`}
-              center={[stop.lat, stop.lng]}
-              radius={1}
-              pathOptions={{
-                color: '#39ff14',
-                fillColor: '#39ff14',
-                fillOpacity: 1,
-                weight: 0,
-              }}
-            />
-          ))}
-          
-          {/* Current stop - larger glow */}
-          {currentStop && (
-            <CircleMarker
-              key="current"
-              center={[currentStop.lat, currentStop.lng]}
-              radius={4}
-              pathOptions={{
-                color: '#fff',
-                fillColor: '#39ff14',
-                fillOpacity: 1,
-                weight: 2,
-              }}
-            />
-          )}
-          
-          {/* Animated travel edge to next stop - great circle arc */}
-          {isPlaying && currentStop && currentIndex < stops.length - 1 && travelProgress > 0 && (
-            <Polyline
-              key={`travel-edge-${currentIndex}`}
-              positions={getGreatCircleArc(
-                currentStop,
-                stops[currentIndex + 1],
-                travelProgress,
-                30 // More points for smoother arc
-              )}
-              pathOptions={{
-                color: '#33ff33',
-                weight: 2,
-                opacity: 0.8,
-                dashArray: '4, 4',
-              }}
-            />
-          )}
-        </MapContainer>
+        )}
       </div>
       
       {/* Scrubber Control Panel */}
@@ -460,10 +572,8 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
           </div>
         )}
 
-        {/* Top border */}
         <div className="text-[#33ff33]/60 text-xs border-t border-[#33ff33]/40" />
 
-        {/* Current Stop Info */}
         <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
           <div className="flex items-center gap-2">
             <span className="text-[#33ff33]/50">STOP:</span>
@@ -479,12 +589,9 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
           )}
         </div>
         
-        {/* Middle border */}
         <div className="border-t border-[#33ff33]/30" />
         
-        {/* Scrubber */}
         <div className="py-2 flex items-center gap-4">
-          {/* Play/Pause Button */}
           <button
             onClick={togglePlay}
             className="px-3 py-1 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs border border-[#33ff33]/50"
@@ -492,16 +599,12 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
             {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'Replay' : '[ ▶ ]'}
           </button>
           
-          {/* Timeline Scrubber */}
           <div className="flex-1 relative h-4 flex items-center">
-            {/* Track background */}
             <div className="absolute inset-x-0 h-1 bg-[#33ff33]/20" />
-            {/* Progress fill */}
             <div 
               className="absolute h-1 bg-[#33ff33]/60 transition-all"
               style={{ width: `${progress}%` }}
             />
-            {/* Block markers */}
             <div className="absolute inset-x-0 flex justify-between pointer-events-none">
               {[...Array(21)].map((_, i) => (
                 <div 
@@ -531,16 +634,13 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
             />
           </div>
           
-          {/* Speed Control */}
           <div className="flex items-center gap-2" ref={speedMenuRef}>
             <span className="text-[#33ff33]/50 text-xs">SPD:</span>
             <div className="relative">
               <button
                 onClick={() => setSpeedMenuOpen(!speedMenuOpen)}
                 className="bg-black border border-[#33ff33]/50 text-[#33ff33] text-xs px-3 py-1 cursor-pointer hover:bg-[#33ff33]/10 focus:outline-none focus:border-[#33ff33] flex items-center gap-3"
-                style={{
-                  textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
-                }}
+                style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
               >
                 <span>{SPEED_OPTIONS.find(o => o.value === playSpeed)?.label || 'MAX'}</span>
                 <svg 
@@ -556,9 +656,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
               {speedMenuOpen && (
                 <div 
                   className="absolute bottom-full left-0 mb-1 bg-black border border-[#33ff33]/50 min-w-full"
-                  style={{
-                    textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
-                  }}
+                  style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
                 >
                   {SPEED_OPTIONS.map((option) => (
                     <button
@@ -582,10 +680,8 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
           </div>
         </div>
         
-        {/* Bottom border */}
         <div className="border-t border-[#33ff33]/30" />
         
-        {/* Progress and ETA */}
         <div className="py-2 flex justify-between text-[#33ff33]/50 text-xs">
           <span>PROGRESS: {progress.toFixed(1)}%</span>
           <span>ETA: {isPlaying ? formatDuration(remainingPlaybackTime) : '-- : -- : --'}</span>
@@ -594,3 +690,4 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     </div>
   )
 }
+
