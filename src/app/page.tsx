@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 
 const ASCII_TITLE = `
+  LIVE
  ███████╗ █████╗ ███╗   ██╗████████╗ █████╗ 
  ██╔════╝██╔══██╗████╗  ██║╚══██╔══╝██╔══██╗
  ███████╗███████║██╔██╗ ██║   ██║   ███████║
@@ -17,6 +18,7 @@ const ASCII_TITLE = `
     ██║   ██╔══██╗██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗
     ██║   ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║
     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+    MEGA 7000 HD
 `
 
 type EntryKind = 'text' | 'hr' | 'ascii' | 'options'
