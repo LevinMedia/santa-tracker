@@ -118,6 +118,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
 
   // Load flight data
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     fetch(dataFile)
       .then(res => res.text())
@@ -146,7 +147,8 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
         }
         
         setStops(data)
-        setCurrentIndex(0)
+        setIsPlaying(false)
+        setCurrentIndex(Math.max(0, data.length - 1))
         setLoading(false)
         console.log(`Loaded ${data.length} flight stops from ${dataFile}`)
       })
@@ -220,6 +222,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
   // Update display time when not playing (from current stop)
   useEffect(() => {
     if (!isPlaying && stops.length > 0 && stops[currentIndex]) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayTime(stops[currentIndex].utc_time)
     }
   }, [isPlaying, currentIndex, stops])
@@ -234,12 +237,16 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
     }
   }, [isPlaying, stops])
 
+  const isAtEnd = stops.length > 0 && currentIndex >= stops.length - 1
+
   const togglePlay = useCallback(() => {
-    if (currentIndex >= stops.length - 1) {
+    if (isAtEnd) {
       setCurrentIndex(0)
+      setIsPlaying(true)
+      return
     }
     setIsPlaying(prev => !prev)
-  }, [currentIndex, stops.length])
+  }, [isAtEnd])
 
   // Close speed menu when clicking outside
   useEffect(() => {
@@ -366,7 +373,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
             onClick={togglePlay}
             className="px-3 py-1 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs border border-[#33ff33]/50"
           >
-            {isPlaying ? '[ ▌▌ ]' : '[ ▶ ]'}
+            {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'Replay' : '[ ▶ ]'}
           </button>
           
           {/* Timeline Scrubber */}
