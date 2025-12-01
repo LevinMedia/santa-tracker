@@ -195,7 +195,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
         }
         
         setStops(data)
-        setCurrentIndex(0) // Start at beginning, no points shown
+        setCurrentIndex(Math.max(0, data.length - 1)) // Start at end for replay state
         setLoading(false)
         console.log(`Loaded ${data.length} flight stops from ${dataFile}`)
       })
@@ -596,7 +596,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
             onClick={togglePlay}
             className="px-3 py-1 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs border border-[#33ff33]/50"
           >
-            {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'Replay' : '[ ▶ ]'}
+            {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'REPLAY' : '[ ▶ ]'}
           </button>
           
           <div className="flex-1 relative h-4 flex items-center">
