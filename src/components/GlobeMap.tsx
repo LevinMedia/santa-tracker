@@ -160,7 +160,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
   useEffect(() => {
     if (globeReady && globeRef.current && !initialized) {
       // Point at North Pole
-      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 5000)
+      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 0)
       setInitialized(true)
     }
   }, [globeReady, initialized])
