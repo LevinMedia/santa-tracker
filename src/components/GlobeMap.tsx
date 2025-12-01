@@ -527,7 +527,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
             ref={globeRef}
             width={typeof window !== 'undefined' ? window.innerWidth : 800}
             height={typeof window !== 'undefined' ? window.innerHeight : 600}
-            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+            globeImageUrl="https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/blackmarble_2016_8k.png"
             backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
             pointsData={visitedPoints}
             pointLat="lat"
