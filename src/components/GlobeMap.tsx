@@ -44,18 +44,15 @@ function parseUTCTime(timeStr: string): number {
   return date.getTime()
 }
 
-// Format duration in human readable
-function formatDuration(ms: number): string {
-  const hours = Math.floor(ms / 3600000)
-  const minutes = Math.floor((ms % 3600000) / 60000)
-  const seconds = Math.floor((ms % 60000) / 1000)
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds}s`
-  }
-  return `${seconds}s`
+// Format elapsed time in hours and minutes
+function formatElapsedTime(ms: number): string {
+  if (ms <= 0) return '0h 0m'
+
+  const totalMinutes = Math.floor(ms / 60000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  return `${hours}h ${minutes}m`
 }
 
 const SPEED_OPTIONS = [
@@ -143,11 +140,6 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
 
   // Mission timing
   const missionStart = stops.length > 0 ? stops[0].timestamp : 0
-  const missionEnd = stops.length > 0 ? stops[stops.length - 1].timestamp : 0
-  
-  const currentStopTime = stops[currentIndex]?.timestamp || missionStart
-  const remainingMissionTime = missionEnd - currentStopTime
-  const remainingPlaybackTime = remainingMissionTime / playSpeed
 
   // Load Globe component on client
   useEffect(() => {
@@ -397,11 +389,13 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
     if (isAtEnd) {
       // Reset for replay - wipe all points
       setCurrentIndex(0)
+      setCurrentSimTime(missionStart)
+      setDisplayTime(formatUTCTime(missionStart))
       setIsPlaying(true)
       return
     }
     setIsPlaying(prev => !prev)
-  }, [isAtEnd])
+  }, [formatUTCTime, isAtEnd, missionStart])
 
   // Close speed menu on outside click
   useEffect(() => {
@@ -418,6 +412,13 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
 
   const currentStop = stops[currentIndex]
   const progress = stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0
+
+  const elapsedMs = missionStart > 0 && currentSimTime
+    ? Math.max(0, currentSimTime - missionStart)
+    : 0
+  const elapsedDisplay = missionStart > 0 && currentSimTime
+    ? formatElapsedTime(elapsedMs)
+    : '-- : --'
 
   // Prepare point data for visited stops
   // Scale current marker size based on zoom level (altitude)
@@ -684,7 +685,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
         
         <div className="py-2 flex justify-between text-[#33ff33]/50 text-xs">
           <span>PROGRESS: {progress.toFixed(1)}%</span>
-          <span>ETA: {isPlaying ? formatDuration(remainingPlaybackTime) : '-- : -- : --'}</span>
+          <span>Elapsed: {elapsedDisplay}</span>
         </div>
       </div>
     </div>

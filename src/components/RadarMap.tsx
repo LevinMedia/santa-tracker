@@ -103,18 +103,15 @@ function getGreatCircleArc(
   return points
 }
 
-// Format duration in human readable
-function formatDuration(ms: number): string {
-  const hours = Math.floor(ms / 3600000)
-  const minutes = Math.floor((ms % 3600000) / 60000)
-  const seconds = Math.floor((ms % 60000) / 1000)
-  
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds}s`
-  }
-  return `${seconds}s`
+// Format elapsed time in hours and minutes
+function formatElapsedTime(ms: number): string {
+  if (ms <= 0) return '0h 0m'
+
+  const totalMinutes = Math.floor(ms / 60000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  return `${hours}h ${minutes}m`
 }
 
 // Calculate shortest longitude difference accounting for date line
@@ -182,6 +179,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false)
   const [displayTime, setDisplayTime] = useState<string>('')
   const [travelProgress, setTravelProgress] = useState(0) // 0-1 progress between current and next stop
+  const [currentSimTime, setCurrentSimTime] = useState<number>(0)
   
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
@@ -191,12 +189,6 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
 
   // Mission timing
   const missionStart = stops.length > 0 ? stops[0].timestamp : 0
-  const missionEnd = stops.length > 0 ? stops[stops.length - 1].timestamp : 0
-  
-  // Playback time remaining
-  const currentStopTime = stops[currentIndex]?.timestamp || missionStart
-  const remainingMissionTime = missionEnd - currentStopTime
-  const remainingPlaybackTime = remainingMissionTime / playSpeed
 
   // Load flight data
   useEffect(() => {
@@ -258,9 +250,10 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
       const elapsed = Date.now() - playStartTime.current
       const scaledElapsed = elapsed * playSpeed
       const targetMissionTime = playStartSimTime.current + scaledElapsed
-      
+
       // Update display time in real-time
       setDisplayTime(formatUTCTime(targetMissionTime))
+      setCurrentSimTime(targetMissionTime)
       
       let newIndex = currentIndex
       for (let i = playStartIndex.current; i < stops.length; i++) {
@@ -320,6 +313,8 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
       setDisplayTime(stops[currentIndex].utc_time)
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTravelProgress(0) // Reset travel progress when paused
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrentSimTime(stops[currentIndex].timestamp)
     }
   }, [isPlaying, currentIndex, stops])
 
@@ -338,11 +333,13 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
   const togglePlay = useCallback(() => {
     if (isAtEnd) {
       setCurrentIndex(0)
+      setCurrentSimTime(missionStart)
+      setDisplayTime(formatUTCTime(missionStart))
       setIsPlaying(true)
       return
     }
     setIsPlaying(prev => !prev)
-  }, [isAtEnd])
+  }, [formatUTCTime, isAtEnd, missionStart])
 
   // Close speed menu when clicking outside
   useEffect(() => {
@@ -359,6 +356,13 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
 
   const currentStop = stops[currentIndex]
   const progress = stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0
+
+  const elapsedMs = missionStart > 0 && currentSimTime
+    ? Math.max(0, currentSimTime - missionStart)
+    : 0
+  const elapsedDisplay = missionStart > 0 && currentSimTime
+    ? formatElapsedTime(elapsedMs)
+    : '-- : --'
 
   return (
     <div className="relative w-full h-full">
@@ -588,7 +592,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
         {/* Progress and ETA */}
         <div className="py-2 flex justify-between text-[#33ff33]/50 text-xs">
           <span>PROGRESS: {progress.toFixed(1)}%</span>
-          <span>ETA: {isPlaying ? formatDuration(remainingPlaybackTime) : '-- : -- : --'}</span>
+          <span>Elapsed: {elapsedDisplay}</span>
         </div>
       </div>
     </div>
