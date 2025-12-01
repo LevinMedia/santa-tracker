@@ -456,6 +456,40 @@ export default function Home() {
           )}
         </div>
 
+        {/* Command Options */}
+        {showOptions && (
+          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
+            <div className="animate-fadeIn">
+              Click, tap or enter command to continue:
+            </div>
+            <div className="mt-3 overflow-x-auto">
+              <div className="inline-flex gap-3 whitespace-nowrap pr-4">
+              {COMMAND_OPTIONS.map((option, index) => (
+                <div
+                  key={option.key}
+                  className="animate-fadeIn min-h-[1.5em]"
+                  style={{ animationDelay: `${index * 0.2}s` }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => option.href !== '#' && handleCommand(option.key)}
+                    className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] ${
+                      option.href === '#'
+                        ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed hover:bg-black hover:text-[#33ff33]'
+                        : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                    }`}
+                    disabled={isProcessing || option.href === '#'}
+                  >
+                    <span className="font-semibold">{option.key} ▓</span>
+                    <span className="ml-3 leading-none">{option.label}</span>
+                  </button>
+                </div>
+              ))}
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Input prompt */}
         {showPrompt && (
           <div className="mt-6 text-[#33ff33] text-sm sm:text-base animate-fadeIn">
