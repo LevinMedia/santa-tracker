@@ -86,7 +86,6 @@ const COMMAND_OPTIONS: CommandOption[] = [
 export default function Home() {
   const router = useRouter()
   const [entries, setEntries] = useState<TerminalEntry[]>([])
-  const [showOptions, setShowOptions] = useState(false)
   const [showPrompt, setShowPrompt] = useState(false)
   const [cursorVisible, setCursorVisible] = useState(true)
   const [currentTime, setCurrentTime] = useState('')
@@ -94,6 +93,7 @@ export default function Home() {
   const [typedChars, setTypedChars] = useState(0)
   const [userInput, setUserInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
+  const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
@@ -115,10 +115,13 @@ export default function Home() {
   )
 
   const appendOptionsEntry = useCallback(() => {
+    const id = `options-${Date.now()}`
     appendEntry({
-      id: `options-${Date.now()}`,
+      id,
       kind: 'options',
     })
+    setActiveOptionsId(id)
+    return id
   }, [appendEntry])
 
   const updateEntry = useCallback(
@@ -203,11 +206,12 @@ export default function Home() {
       )
     })
 
-    timers.push(setTimeout(() => appendOptionsEntry(), 5200))
-
-    timers.push(setTimeout(() => setShowOptions(true), 5200))
-
-    timers.push(setTimeout(() => setShowPrompt(true), 5800))
+    timers.push(
+      setTimeout(() => {
+        appendOptionsEntry()
+        setShowPrompt(true)
+      }, 5200),
+    )
 
     timersRef.current = timers
   }, [appendEntry, appendOptionsEntry])
@@ -241,11 +245,16 @@ export default function Home() {
       try {
         const parsed: TerminalEntry[] = JSON.parse(stored)
         setEntries(parsed)
-        setShowOptions(true)
-        setShowPrompt(true)
-        if (!parsed.some(entry => entry.kind === 'options')) {
+
+        const lastOptionsEntry = [...parsed].reverse().find(entry => entry.kind === 'options')
+
+        if (lastOptionsEntry) {
+          setActiveOptionsId(lastOptionsEntry.id)
+        } else {
           appendOptionsEntry()
         }
+
+        setShowPrompt(true)
       } catch (error) {
         console.error('Failed to restore terminal history', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -263,7 +272,7 @@ export default function Home() {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [entries, typingLine, typedChars, showOptions, showPrompt])
+  }, [entries, typingLine, typedChars, showPrompt])
 
   const handleCommand = useCallback(
     async (cmd: string) => {
@@ -273,6 +282,8 @@ export default function Home() {
 
       if (trimmed === '1') {
         setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
         appendEntry({
           id: `cmd-1-${Date.now()}`,
           kind: 'text',
@@ -310,16 +321,21 @@ export default function Home() {
           kind: 'hr',
         })
 
-        appendOptionsEntry()
-
         await sleep(260)
         router.push('/map')
+
+        appendOptionsEntry()
+        setShowPrompt(true)
       } else if (trimmed) {
+        setShowPrompt(false)
         appendEntry({
           id: `unknown-${Date.now()}`,
           kind: 'text',
           text: `UNKNOWN COMMAND: ${trimmed}`,
         })
+
+        appendOptionsEntry()
+        setShowPrompt(true)
       }
 
       setUserInput('')
@@ -395,7 +411,40 @@ export default function Home() {
               )
             }
 
-            if (entry.kind === 'options') return null
+            if (entry.kind === 'options') {
+              const isActiveOptions = entry.id === activeOptionsId
+              return (
+                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 animate-fadeIn">
+                  <div>Click, tap or enter command to continue:</div>
+                  <div className="mt-3 overflow-x-auto">
+                    <div className="inline-flex gap-3 whitespace-nowrap pr-4">
+                      {COMMAND_OPTIONS.map((option, index) => (
+                        <div
+                          key={`${entry.id}-${option.key}`}
+                          className="min-h-[1.5em]"
+                          style={{ animationDelay: `${index * 0.2}s` }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => option.href !== '#' && handleCommand(option.key)}
+                            className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] ${
+                              option.href === '#'
+                                ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed hover:bg-black hover:text-[#33ff33]'
+                                : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                            }`}
+                            disabled={isProcessing || option.href === '#' || !isActiveOptions}
+                          >
+                            <span className="font-bold underline">{option.key}</span>
+                            <span className="ml-1 font-semibold">▓</span>
+                            <span className="ml-3 leading-none">{option.label}</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            }
 
             if (entry.kind === 'ascii') {
               return (
@@ -428,41 +477,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Command Options */}
-        {showOptions && (
-          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
-            <div className="animate-fadeIn">
-              Click, tap or enter command to continue:
-            </div>
-            <div className="mt-3 overflow-x-auto">
-              <div className="inline-flex gap-3 whitespace-nowrap pr-4">
-              {COMMAND_OPTIONS.map((option, index) => (
-                <div
-                  key={option.key}
-                  className="animate-fadeIn min-h-[1.5em]"
-                  style={{ animationDelay: `${index * 0.2}s` }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => option.href !== '#' && handleCommand(option.key)}
-                    className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] ${
-                      option.href === '#'
-                        ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed hover:bg-black hover:text-[#33ff33]'
-                        : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
-                    }`}
-                    disabled={isProcessing || option.href === '#'}
-                  >
-                    <span className="font-bold underline">{option.key}</span>
-                    <span className="ml-1 font-semibold">▓</span>
-                    <span className="ml-3 leading-none">{option.label}</span>
-                  </button>
-                </div>
-              ))}
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* Input prompt */}
         {showPrompt && (
           <div className="mt-6 text-[#33ff33] text-sm sm:text-base animate-fadeIn">
