@@ -351,7 +351,7 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
         <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
           <div className="flex items-center gap-2">
             <span className="text-[#33ff33]/50">STOP:</span>
-            <span>{String(currentIndex + 1).padStart(5, '0')}</span>
+            <span>{(currentIndex + 1).toLocaleString()}</span>
             <span className="text-[#33ff33]/50">/</span>
             <span>{stops.length.toLocaleString()}</span>
           </div>

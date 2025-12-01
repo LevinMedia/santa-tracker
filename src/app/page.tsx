@@ -21,7 +21,7 @@ const ASCII_TITLE = `
     MEGA 7000 HD
 `
 
-type EntryKind = 'text' | 'hr' | 'ascii' | 'options'
+type EntryKind = 'text' | 'hr' | 'ascii' | 'options' | 'countdown'
 
 interface BootLine {
   text: string
@@ -32,7 +32,7 @@ interface BootLine {
 interface MenuItem {
   text?: string
   delay: number
-  type?: 'hr'
+  type?: 'hr' | 'countdown'
 }
 
 interface CommandOption {
@@ -74,14 +74,15 @@ const MENU_ITEMS: MenuItem[] = [
   { text: '', delay: 4200 },
   { text: '    SYSTEM STATUS........ STANDBY', delay: 4400 },
   { text: '    SANTA ACTIVITY....... NOT DETECTED', delay: 4600 },
-  { text: '', delay: 4800 },
-  { type: 'hr', delay: 4900 },
+  { type: 'countdown', delay: 4800 },
+  { text: '', delay: 5000 },
+  { type: 'hr', delay: 5100 },
   { text: '', delay: 5000 },
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
-  { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5200 },
-  { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5400 },
+  { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
+  { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
 ]
 
 export default function Home() {
@@ -95,9 +96,46 @@ export default function Home() {
   const [userInput, setUserInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
+
+  // Calculate countdown to next Christmas
+  const getNextChristmas = useCallback(() => {
+    const now = new Date()
+    const year = now.getMonth() === 11 && now.getDate() > 25 ? now.getFullYear() + 1 : now.getFullYear()
+    const christmas = new Date(year, 11, 25, 0, 0, 0) // Dec 25
+    if (now > christmas) {
+      christmas.setFullYear(year + 1)
+    }
+    return christmas
+  }, [])
+
+  // Update countdown every second
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const christmas = getNextChristmas()
+      const diff = christmas.getTime() - now.getTime()
+      
+      if (diff <= 0) {
+        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+        return
+      }
+      
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+      
+      setCountdown({ days, hours, minutes, seconds })
+    }
+    
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [getNextChristmas])
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -199,7 +237,7 @@ export default function Home() {
           () =>
             appendEntry({
               id: `menu-${index}`,
-              kind: item.type === 'hr' ? 'hr' : 'text',
+              kind: item.type === 'hr' ? 'hr' : item.type === 'countdown' ? 'countdown' : 'text',
               text: item.text,
             }),
           item.delay,
@@ -449,7 +487,7 @@ export default function Home() {
                           className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
                             option.href === '#' || !isActiveOptions
                               ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
-                              : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)]'
+                              : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
                           }`}
                           disabled={isProcessing || option.href === '#' || !isActiveOptions}
                         >
@@ -474,6 +512,14 @@ export default function Home() {
                 >
                   {entry.text ?? ASCII_TITLE}
                 </pre>
+              )
+            }
+
+            if (entry.kind === 'countdown') {
+              return (
+                <div key={entry.id} className="min-h-[1.5em]">
+                  {'    '}COUNTDOWN TO CHRISTMAS .. {String(countdown.days).padStart(2, '0')}D {String(countdown.hours).padStart(2, '0')}H {String(countdown.minutes).padStart(2, '0')}M {String(countdown.seconds).padStart(2, '0')}S
+                </div>
               )
             }
 
