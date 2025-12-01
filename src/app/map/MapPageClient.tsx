@@ -31,11 +31,19 @@ interface MapPageClientProps {
   flightParam: string
 }
 
+const FLIGHT_TITLES: Record<string, string> = {
+  'test-flight-1': '2024 / SANTA TRACKER FLIGHT LOG',
+}
+
 export default function MapPageClient({ flightParam }: MapPageClientProps) {
   const router = useRouter()
 
   const flightLogName = useMemo(() => flightParam.replace(/\.csv$/, ''), [flightParam])
   const dataFile = `/${flightLogName}.csv`
+  const flightLogTitle = useMemo(
+    () => FLIGHT_TITLES[flightLogName] ?? flightLogName.replace(/-/g, ' '),
+    [flightLogName]
+  )
 
   // ESC key to go back
   useEffect(() => {
@@ -129,7 +137,7 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
               [ESC] BACK
             </Link>
             <span className="text-[#33ff33]/30">│</span>
-            <h1 className="text-[#33ff33] text-sm tracking-wider uppercase">{flightLogName.replace(/-/g, ' ')}</h1>
+            <h1 className="text-[#33ff33] text-sm tracking-wider uppercase">{flightLogTitle}</h1>
           </div>
         </div>
       </header>
