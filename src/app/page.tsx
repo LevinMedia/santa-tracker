@@ -1,7 +1,5 @@
 'use client'
 
-// Santa Tracker v0.1 - Trigger redeploy
-
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 
@@ -51,7 +49,7 @@ interface TerminalEntry {
 const STORAGE_KEY = 'terminalHistory'
 
 const BOOT_SEQUENCE: BootLine[] = [
-  { text: '**** NORTH POLE COMPUTING C64 ****', delay: 0 },
+  { text: '**** LEVINMEDIA_OS BOOT SEQUENCE ****', delay: 0 },
   { text: '', delay: 100 },
   { text: '64K RAM SYSTEM  38911 BASIC BYTES FREE', delay: 200 },
   { text: '', delay: 300 },
@@ -67,8 +65,8 @@ const MENU_ITEMS: MenuItem[] = [
   { type: 'hr', delay: 2700 },
   { text: '', delay: 2800 },
   { text: '    Accessing NORAD mainframe...', delay: 3000 },
-  { text: '    连接中国卫星网络...', delay: 3300 },
-  { text: '    Подключение к российской системе...', delay: 3600 },
+  { text: '    正在连接中国的远程雷达与空中预警指挥网络……', delay: 3300 },
+  { text: '    Подключение к системе раннего предупреждения и противовоздушной обороны ВКС…', delay: 3600 },
   { text: '    Bypassing security protocols...', delay: 3900 },
   { text: '', delay: 4200 },
   { text: '    SYSTEM STATUS........ STANDBY', delay: 4400 },
