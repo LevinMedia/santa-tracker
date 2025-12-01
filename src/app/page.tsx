@@ -21,7 +21,7 @@ const ASCII_TITLE = `
     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 `
 
-type EntryKind = 'text' | 'hr' | 'ascii'
+type EntryKind = 'text' | 'hr' | 'ascii' | 'options'
 
 interface BootLine {
   text: string
@@ -97,6 +97,7 @@ export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
+  const hasOptionsEntry = useRef(false)
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -234,6 +235,7 @@ export default function Home() {
         setEntries(parsed)
         setShowOptions(true)
         setShowPrompt(true)
+        hasOptionsEntry.current = parsed.some(entry => entry.kind === 'options')
       } catch (error) {
         console.error('Failed to restore terminal history', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -245,6 +247,17 @@ export default function Home() {
 
     return () => timersRef.current.forEach(t => clearTimeout(t))
   }, [runBootSequence])
+
+  // Ensure command options render in the terminal stream
+  useEffect(() => {
+    if (showOptions && !hasOptionsEntry.current) {
+      hasOptionsEntry.current = true
+      appendEntry({
+        id: `options-${Date.now()}`,
+        kind: 'options',
+      })
+    }
+  }, [appendEntry, showOptions])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -370,8 +383,38 @@ export default function Home() {
           {entries.map(entry => {
             if (entry.kind === 'hr') {
               return (
-                <div key={entry.id} className="min-h-[1.5em] w-full">
+                <div key={entry.id} className="min-h-[1.5em] w-full mt-4">
                   <hr className="border-0 border-t border-[#33ff33] opacity-70 w-full" />
+                </div>
+              )
+            }
+
+            if (entry.kind === 'options') {
+              return (
+                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
+                  <div className="animate-fadeIn">Click, tap or enter command to continue:</div>
+                  <div className="mt-2">
+                    {COMMAND_OPTIONS.map((option, index) => (
+                      <div
+                        key={option.key}
+                        className="animate-fadeIn min-h-[1.5em]"
+                        style={{ animationDelay: `${index * 0.2}s` }}
+                      >
+                        {option.href !== '#' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCommand(option.key)}
+                            className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
+                            disabled={isProcessing}
+                          >
+                            [{option.key}] {option.label}
+                          </button>
+                        ) : (
+                          <span className="opacity-50 cursor-not-allowed">[{option.key}] {option.label}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )
             }
@@ -407,41 +450,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Command Options */}
-        {showOptions && (
-          <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
-            <div className="animate-fadeIn">
-              Click, tap or enter command to continue:
-            </div>
-            <div className="mt-2">
-              {COMMAND_OPTIONS.map((option, index) => (
-                <div
-                  key={option.key}
-                  className="animate-fadeIn min-h-[1.5em]"
-                  style={{ animationDelay: `${index * 0.2}s` }}
-                >
-                  {option.href !== '#' ? (
-                    <button
-                      type="button"
-                      onClick={() => handleCommand(option.key)}
-                      className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
-                      disabled={isProcessing}
-                    >
-                      [{option.key}] {option.label}
-                    </button>
-                  ) : (
-                    <span className="opacity-50 cursor-not-allowed">
-                      [{option.key}] {option.label}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
         {/* Input prompt */}
-        {showPrompt && (
+        {showPrompt && typingLine === null && !isProcessing && (
           <div className="mt-6 text-[#33ff33] text-sm sm:text-base animate-fadeIn">
             <span>READY. </span>
             <span>{userInput}</span>
