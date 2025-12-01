@@ -329,13 +329,31 @@ export default function Home() {
         appendOptionsEntry()
         setShowPrompt(true)
       } else if (trimmed) {
+        setIsProcessing(true)
         setShowPrompt(false)
+        setActiveOptionsId(null)
+        
+        appendEntry({
+          id: `cmd-unknown-${Date.now()}`,
+          kind: 'text',
+          text: `> COMMAND [${trimmed}]`,
+        })
+        
+        await sleep(200)
+        
         appendEntry({
           id: `unknown-${Date.now()}`,
           kind: 'text',
-          text: `UNKNOWN COMMAND: ${trimmed}`,
+          text: `ERROR: UNKNOWN COMMAND "${trimmed}"`,
+          className: 'mb-10'
         })
 
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+
+        await sleep(300)
         appendOptionsEntry()
         setShowPrompt(true)
       }
