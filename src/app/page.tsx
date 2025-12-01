@@ -46,6 +46,7 @@ interface TerminalEntry {
   id: string
   kind: EntryKind
   text?: string
+  className?: string
 }
 
 const STORAGE_KEY = 'terminalHistory'
@@ -313,7 +314,8 @@ export default function Home() {
         appendEntry({
           id: `ready-${Date.now()}`,
           kind: 'text',
-          text: 'ARCHIVE READY. OPENING 2024 MISSION...'
+          text: 'ARCHIVE READY. OPENING 2024 MISSION...',
+          className: 'mb-10'
         })
 
         appendEntry({
@@ -414,33 +416,30 @@ export default function Home() {
             if (entry.kind === 'options') {
               const isActiveOptions = entry.id === activeOptionsId
               return (
-                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 animate-fadeIn">
+                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
                   <div>Click, tap or enter command to continue:</div>
-                  <div className="mt-3 overflow-x-auto">
-                    <div className="inline-flex gap-3 whitespace-nowrap pr-4">
-                      {COMMAND_OPTIONS.map((option, index) => (
-                        <div
-                          key={`${entry.id}-${option.key}`}
-                          className="min-h-[1.5em]"
-                          style={{ animationDelay: `${index * 0.2}s` }}
+                  <div className="mt-3 flex flex-col gap-2">
+                    {COMMAND_OPTIONS.map((option, index) => (
+                      <div
+                        key={`${entry.id}-${option.key}`}
+                        className="min-h-[1.5em]"
+                        style={{ animationDelay: `${index * 0.2}s` }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => option.href !== '#' && isActiveOptions && handleCommand(option.key)}
+                          className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
+                            option.href === '#' || !isActiveOptions
+                              ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
+                              : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)]'
+                          }`}
+                          disabled={isProcessing || option.href === '#' || !isActiveOptions}
                         >
-                          <button
-                            type="button"
-                            onClick={() => option.href !== '#' && handleCommand(option.key)}
-                            className={`inline-flex items-center px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.25)] ${
-                              option.href === '#'
-                                ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed hover:bg-black hover:text-[#33ff33]'
-                                : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
-                            }`}
-                            disabled={isProcessing || option.href === '#' || !isActiveOptions}
-                          >
-                            <span className="font-bold underline">{option.key}</span>
-                            <span className="ml-1 font-semibold">▓</span>
-                            <span className="ml-3 leading-none">{option.label}</span>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                          <span className="font-bold underline">{option.key}</span>
+                          <span className="ml-3 leading-none">{option.label}</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -450,7 +449,7 @@ export default function Home() {
               return (
                 <pre
                   key={entry.id}
-                  className="text-[#33ff33] text-[6px] sm:text-[8px] md:text-[10px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
+                  className="text-[#33ff33] text-[2.8vw] sm:text-[8px] md:text-[10px] lg:text-[12px] xl:text-[14px] 2xl:text-[16px] leading-none mt-4 mb-4 animate-fadeIn whitespace-pre overflow-x-auto"
                   style={{
                     textShadow: '0 0 10px rgba(51, 255, 51, 0.9), 0 0 20px rgba(51, 255, 51, 0.6), 0 0 40px rgba(51, 255, 51, 0.4)',
                   }}
@@ -461,7 +460,7 @@ export default function Home() {
             }
 
             return (
-              <div key={entry.id} className="min-h-[1.5em]">
+              <div key={entry.id} className={`min-h-[1.5em] ${entry.className || ''}`}>
                 {entry.text}
               </div>
             )
