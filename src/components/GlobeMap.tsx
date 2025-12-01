@@ -160,10 +160,22 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
   useEffect(() => {
     if (globeReady && globeRef.current && !initialized) {
       // Point at North Pole
-      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 5000)
+      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 0)
       setInitialized(true)
     }
   }, [globeReady, initialized])
+
+  // Ensure no autorotation while initializing
+  useEffect(() => {
+    if (!globeReady || !globeRef.current) return
+
+    const controls = globeRef.current.controls?.()
+    if (controls) {
+      controls.autoRotate = false
+      controls.autoRotateSpeed = 0
+      controls.update?.()
+    }
+  }, [globeReady])
 
   // Load flight data in background
   useEffect(() => {
@@ -548,6 +560,7 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
             arcDashAnimateTime={0}
             atmosphereColor="#33ff33"
             atmosphereAltitude={0.15}
+            animateIn={false}
             onGlobeReady={() => setGlobeReady(true)}
           />
         )}
