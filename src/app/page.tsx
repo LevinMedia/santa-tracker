@@ -83,6 +83,7 @@ const MENU_ITEMS: MenuItem[] = [
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
   { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
+  { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
 
 export default function Home() {
@@ -318,8 +319,9 @@ export default function Home() {
       if (!showPrompt || isProcessing) return
 
       const trimmed = cmd.trim()
+      const normalized = trimmed.toUpperCase()
 
-      if (trimmed === '1') {
+      if (normalized === '1') {
         setIsProcessing(true)
         setShowPrompt(false)
         setActiveOptionsId(null)
@@ -366,11 +368,71 @@ export default function Home() {
 
         appendOptionsEntry()
         setShowPrompt(true)
+      } else if (normalized === 'Q') {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+
+        appendEntry({
+          id: `cmd-q-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [Q] QUIT',
+        })
+
+        await sleep(200)
+
+        appendEntry({
+          id: `shutdown-init-${Date.now()}`,
+          kind: 'text',
+          text: 'INITIATING SHUTDOWN SEQUENCE...',
+        })
+
+        await sleep(400)
+
+        appendEntry({
+          id: `shutdown-link-${Date.now()}`,
+          kind: 'text',
+          text: 'CLOSING CONNECTIONS ...',
+        })
+
+        await sleep(400)
+
+        appendEntry({
+          id: `shutdown-storage-${Date.now()}`,
+          kind: 'text',
+          text: 'PURGING LOCAL STORAGE ...',
+        })
+
+        await sleep(400)
+
+        if (typeof window !== 'undefined') {
+          localStorage.clear()
+        }
+
+        timersRef.current.forEach(t => clearTimeout(t))
+        timersRef.current = []
+
+        setEntries([])
+        setUserInput('')
+        setActiveOptionsId(null)
+
+        await sleep(200)
+
+        setEntries([
+          {
+            id: `shutdown-message-${Date.now()}`,
+            kind: 'text',
+            text: 'Refresh your browser to to restart the application with the blinking ready prompt below.',
+          },
+        ])
+
+        setShowPrompt(true)
+        setIsProcessing(false)
       } else if (trimmed) {
         setIsProcessing(true)
         setShowPrompt(false)
         setActiveOptionsId(null)
-        
+
         appendEntry({
           id: `cmd-unknown-${Date.now()}`,
           kind: 'text',
