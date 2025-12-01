@@ -136,7 +136,7 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
             >
               [ESC] BACK
             </Link>
-            <span className="text-[#33ff33]/30">│</span>
+            <span className="text-[#33ff33]/30">🎅</span>
             <h1 className="text-[#33ff33] text-sm tracking-wider uppercase">{flightLogTitle}</h1>
           </div>
         </div>
