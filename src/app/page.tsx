@@ -97,7 +97,6 @@ export default function Home() {
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
-  const hasOptionsEntry = useRef(false)
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -114,6 +113,13 @@ export default function Home() {
     },
     [persistEntries],
   )
+
+  const appendOptionsEntry = useCallback(() => {
+    appendEntry({
+      id: `options-${Date.now()}`,
+      kind: 'options',
+    })
+  }, [appendEntry])
 
   const updateEntry = useCallback(
     (id: string, text: string) => {
@@ -197,12 +203,14 @@ export default function Home() {
       )
     })
 
+    timers.push(setTimeout(() => appendOptionsEntry(), 5200))
+
     timers.push(setTimeout(() => setShowOptions(true), 5200))
 
     timers.push(setTimeout(() => setShowPrompt(true), 5800))
 
     timersRef.current = timers
-  }, [appendEntry])
+  }, [appendEntry, appendOptionsEntry])
 
   // Cursor blink effect
   useEffect(() => {
@@ -235,7 +243,9 @@ export default function Home() {
         setEntries(parsed)
         setShowOptions(true)
         setShowPrompt(true)
-        hasOptionsEntry.current = parsed.some(entry => entry.kind === 'options')
+        if (!parsed.some(entry => entry.kind === 'options')) {
+          appendOptionsEntry()
+        }
       } catch (error) {
         console.error('Failed to restore terminal history', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -246,18 +256,7 @@ export default function Home() {
     }
 
     return () => timersRef.current.forEach(t => clearTimeout(t))
-  }, [runBootSequence])
-
-  // Ensure command options render in the terminal stream
-  useEffect(() => {
-    if (showOptions && !hasOptionsEntry.current) {
-      hasOptionsEntry.current = true
-      appendEntry({
-        id: `options-${Date.now()}`,
-        kind: 'options',
-      })
-    }
-  }, [appendEntry, showOptions])
+  }, [appendOptionsEntry, runBootSequence])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -306,6 +305,13 @@ export default function Home() {
           text: 'ARCHIVE READY. OPENING 2024 MISSION...'
         })
 
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+
+        appendOptionsEntry()
+
         await sleep(260)
         router.push('/map')
       } else if (trimmed) {
@@ -319,7 +325,7 @@ export default function Home() {
       setUserInput('')
       setIsProcessing(false)
     },
-    [appendEntry, isProcessing, router, showPrompt, sleep, updateEntry],
+    [appendEntry, appendOptionsEntry, isProcessing, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
