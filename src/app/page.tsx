@@ -21,7 +21,7 @@ const ASCII_TITLE = `
     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 `
 
-type EntryKind = 'text' | 'hr' | 'ascii'
+type EntryKind = 'text' | 'hr' | 'ascii' | 'options'
 
 interface BootLine {
   text: string
@@ -114,6 +114,13 @@ export default function Home() {
     [persistEntries],
   )
 
+  const appendOptionsEntry = useCallback(() => {
+    appendEntry({
+      id: `options-${Date.now()}`,
+      kind: 'options',
+    })
+  }, [appendEntry])
+
   const updateEntry = useCallback(
     (id: string, text: string) => {
       setEntries(prev => {
@@ -196,12 +203,14 @@ export default function Home() {
       )
     })
 
+    timers.push(setTimeout(() => appendOptionsEntry(), 5200))
+
     timers.push(setTimeout(() => setShowOptions(true), 5200))
 
     timers.push(setTimeout(() => setShowPrompt(true), 5800))
 
     timersRef.current = timers
-  }, [appendEntry])
+  }, [appendEntry, appendOptionsEntry])
 
   // Cursor blink effect
   useEffect(() => {
@@ -234,6 +243,9 @@ export default function Home() {
         setEntries(parsed)
         setShowOptions(true)
         setShowPrompt(true)
+        if (!parsed.some(entry => entry.kind === 'options')) {
+          appendOptionsEntry()
+        }
       } catch (error) {
         console.error('Failed to restore terminal history', error)
         localStorage.removeItem(STORAGE_KEY)
@@ -244,7 +256,7 @@ export default function Home() {
     }
 
     return () => timersRef.current.forEach(t => clearTimeout(t))
-  }, [runBootSequence])
+  }, [appendOptionsEntry, runBootSequence])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -293,6 +305,13 @@ export default function Home() {
           text: 'ARCHIVE READY. OPENING 2024 MISSION...'
         })
 
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+
+        appendOptionsEntry()
+
         await sleep(260)
         router.push('/map')
       } else if (trimmed) {
@@ -306,7 +325,7 @@ export default function Home() {
       setUserInput('')
       setIsProcessing(false)
     },
-    [appendEntry, isProcessing, router, showPrompt, sleep, updateEntry],
+    [appendEntry, appendOptionsEntry, isProcessing, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
@@ -372,6 +391,36 @@ export default function Home() {
               return (
                 <div key={entry.id} className="min-h-[1.5em] w-full">
                   <hr className="border-0 border-t border-[#33ff33] opacity-70 w-full" />
+                </div>
+              )
+            }
+
+            if (entry.kind === 'options') {
+              return (
+                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
+                  <div className="animate-fadeIn">Click, tap or enter command to continue:</div>
+                  <div className="mt-2">
+                    {COMMAND_OPTIONS.map((option, index) => (
+                      <div
+                        key={option.key}
+                        className="animate-fadeIn min-h-[1.5em]"
+                        style={{ animationDelay: `${index * 0.2}s` }}
+                      >
+                        {option.href !== '#' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleCommand(option.key)}
+                            className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
+                            disabled={isProcessing}
+                          >
+                            [{option.key}] {option.label}
+                          </button>
+                        ) : (
+                          <span className="opacity-50 cursor-not-allowed">[{option.key}] {option.label}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )
             }
