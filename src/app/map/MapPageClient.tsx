@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 
-// Dynamically import the map component to avoid SSR issues with Leaflet
-const RadarMap = dynamic(() => import('@/components/RadarMap'), {
+// Dynamically import the globe component to avoid SSR issues
+const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
   ssr: false,
   loading: () => (
     <div
@@ -106,9 +106,9 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
         />
       </div>
 
-      {/* Map container with scrubber */}
+      {/* Globe container with scrubber */}
       <div className="absolute inset-0">
-        <RadarMap dataFile={dataFile} />
+        <GlobeMap dataFile={dataFile} />
       </div>
 
       {/* Header */}
