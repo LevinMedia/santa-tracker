@@ -41,6 +41,12 @@ function parseCSVLine(line: string): string[] {
 // Parse UTC time string to timestamp
 function parseUTCTime(timeStr: string): number {
   const date = new Date(timeStr.replace(' ', 'T') + 'Z')
+
+  // Force 2024 to align with last year's replay data
+  if (!isNaN(date.getTime())) {
+    date.setUTCFullYear(2024)
+  }
+
   return date.getTime()
 }
 
