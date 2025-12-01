@@ -326,23 +326,28 @@ export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapPr
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
         }}
       >
+        {currentStop && (
+          <div className="pb-3 text-center text-[#33ff33]">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
+              Last verified location
+            </div>
+            <div className="text-sm md:text-base font-semibold uppercase">
+              {currentStop.city}, {currentStop.country}
+            </div>
+          </div>
+        )}
+
         {/* Top border */}
         <div className="text-[#33ff33]/60 text-xs border-t border-[#33ff33]/40" />
-        
+
         {/* Current Stop Info */}
-        <div className="py-2 flex items-center justify-between text-[#33ff33] text-xs">
+        <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
           <div className="flex items-center gap-2">
             <span className="text-[#33ff33]/50">STOP:</span>
             <span>{String(currentIndex + 1).padStart(5, '0')}</span>
             <span className="text-[#33ff33]/50">/</span>
             <span>{stops.length.toLocaleString()}</span>
           </div>
-          {currentStop && (
-            <div className="flex items-center gap-2">
-              <span className="text-[#33ff33]/50">LOC:</span>
-              <span className="uppercase">{currentStop.city}, {currentStop.country}</span>
-            </div>
-          )}
           {displayTime && (
             <div className="flex items-center gap-2">
               <span className="text-[#33ff33]/50">UTC:</span>
