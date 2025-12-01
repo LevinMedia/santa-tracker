@@ -395,35 +395,7 @@ export default function Home() {
               )
             }
 
-            if (entry.kind === 'options') {
-              return (
-                <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2">
-                  <div className="animate-fadeIn">Click, tap or enter command to continue:</div>
-                  <div className="mt-2">
-                    {COMMAND_OPTIONS.map((option, index) => (
-                      <div
-                        key={option.key}
-                        className="animate-fadeIn min-h-[1.5em]"
-                        style={{ animationDelay: `${index * 0.2}s` }}
-                      >
-                        {option.href !== '#' ? (
-                          <button
-                            type="button"
-                            onClick={() => handleCommand(option.key)}
-                            className="hover:bg-[#33ff33] hover:text-black transition-colors duration-100 inline-block px-1 -mx-1"
-                            disabled={isProcessing}
-                          >
-                            [{option.key}] {option.label}
-                          </button>
-                        ) : (
-                          <span className="opacity-50 cursor-not-allowed">[{option.key}] {option.label}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            }
+            if (entry.kind === 'options') return null
 
             if (entry.kind === 'ascii') {
               return (
@@ -480,7 +452,8 @@ export default function Home() {
                     }`}
                     disabled={isProcessing || option.href === '#'}
                   >
-                    <span className="font-semibold">{option.key} ▓</span>
+                    <span className="font-bold underline">{option.key}</span>
+                    <span className="ml-1 font-semibold">▓</span>
                     <span className="ml-3 leading-none">{option.label}</span>
                   </button>
                 </div>
