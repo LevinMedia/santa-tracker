@@ -32,7 +32,7 @@ interface MapPageClientProps {
 }
 
 const FLIGHT_TITLES: Record<string, string> = {
-  'test-flight-1': '2024 / SANTA TRACKER FLIGHT LOG',
+  'test-flight-1': 'Santa tracker replay',
 }
 
 export default function MapPageClient({ flightParam }: MapPageClientProps) {
