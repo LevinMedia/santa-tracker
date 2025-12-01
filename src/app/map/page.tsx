@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -29,7 +29,12 @@ const RadarMap = dynamic(() => import('@/components/RadarMap'), {
 
 export default function MapPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isClient, setIsClient] = useState(false)
+
+  const flightParam = searchParams.get('flight') || 'test-flight-1'
+  const flightLogName = useMemo(() => flightParam.replace(/\.csv$/, ''), [flightParam])
+  const dataFile = `/${flightLogName}.csv`
 
   useEffect(() => {
     setIsClient(true)
@@ -103,7 +108,7 @@ export default function MapPage() {
 
       {/* Map container with scrubber */}
       <div className="absolute inset-0">
-        {isClient && <RadarMap dataFile="/test-flight-1.csv" />}
+        {isClient && <RadarMap dataFile={dataFile} />}
       </div>
 
       {/* Header */}
@@ -117,41 +122,19 @@ export default function MapPage() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 pointer-events-auto">
-            <Link 
+            <Link
               href="/"
-              className="text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black transition-colors text-xs px-2 py-1 border border-[#33ff33]/50"
+              className="text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black transition-colors text-xs px-2 py-1 border border-[#33ff33]/50 whitespace-nowrap"
             >
               [ESC] BACK
             </Link>
             <span className="text-[#33ff33]/30">│</span>
-            <h1 className="text-[#33ff33] text-sm tracking-wider">
-              SANTA TRACKER // RADAR MODULE
+            <h1 className="text-[#33ff33] text-sm tracking-wider uppercase">
+              {flightLogName.replace(/-/g, ' ')}
             </h1>
-            <span className="text-[#33ff33]/40 text-xs">v0.1</span>
-          </div>
-          
-          <div className="flex items-center gap-4 text-[#33ff33]/60 text-xs">
-            <span className="flex items-center gap-2">
-              <span className="animate-pulse">●</span>
-              SYSTEM ONLINE
-            </span>
           </div>
         </div>
       </header>
-
-      {/* Corner decorations - terminal style */}
-      <div className="absolute top-12 left-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
-        ┌──
-      </div>
-      <div className="absolute top-12 right-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
-        ──┐
-      </div>
-      <div className="absolute bottom-4 left-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
-        └──
-      </div>
-      <div className="absolute bottom-4 right-4 text-[#33ff33]/30 font-mono text-xs z-20 pointer-events-none" style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.5)' }}>
-        ──┘
-      </div>
     </div>
   )
 }
