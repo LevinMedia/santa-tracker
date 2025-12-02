@@ -21,6 +21,15 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `/` | Home — Santa status dashboard |
 | `/map` | Radar Map — Retro green radar-style world map |
 
+## Night globe textures
+
+The 3D globe defaults to NASA's Black Marble 8K night lights image. You can point the app at your own equirectangular night texture (including a stitched Black Marble export such as the one in [`experientia.in`](https://github.com/experientia/experientia.in/tree/react/src/nasa-black-marble)) without downloading anything into this repo by setting environment variables:
+
+- `NEXT_PUBLIC_NIGHT_GLOBE_URL` — URL to the equirectangular night texture to use for the globe surface.
+- `NEXT_PUBLIC_NIGHT_BACKGROUND_URL` — URL for the starfield background.
+
+If you maintain a higher-resolution texture or a service that serves a single equirectangular export built from your tiles, host it on a CDN and set `NEXT_PUBLIC_NIGHT_GLOBE_URL` accordingly; otherwise the app falls back to the bundled 8K NASA image.
+
 ## Tech Stack
 
 - **Next.js 16** — React framework with App Router

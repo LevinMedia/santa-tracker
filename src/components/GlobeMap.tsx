@@ -120,6 +120,14 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
+const NIGHT_GLOBE_URL =
+  process.env.NEXT_PUBLIC_NIGHT_GLOBE_URL ??
+  'https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144898/blackmarble_2016_8k.png'
+
+const NIGHT_BACKGROUND_URL =
+  process.env.NEXT_PUBLIC_NIGHT_BACKGROUND_URL ??
+  '//unpkg.com/three-globe/example/img/night-sky.png'
+
 export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
@@ -546,8 +554,8 @@ export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapPr
             ref={globeRef}
             width={typeof window !== 'undefined' ? window.innerWidth : 800}
             height={typeof window !== 'undefined' ? window.innerHeight : 600}
-            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-            backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+            globeImageUrl={NIGHT_GLOBE_URL}
+            backgroundImageUrl={NIGHT_BACKGROUND_URL}
             pointsData={visitedPoints}
             pointLat="lat"
             pointLng="lng"
