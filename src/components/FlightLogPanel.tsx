@@ -15,6 +15,7 @@ interface FlightStop {
   utc_offset?: number
   utc_offset_rounded?: number
   population?: number
+  // Weather data
   temperature_c?: number
   weather_condition?: string
   wind_speed_mps?: number
@@ -270,6 +271,20 @@ export default function FlightLogPanel({
                           <div className="text-[10px] text-[#33ff33]/50 uppercase tracking-wider">
                             {stop.country}
                           </div>
+                          {/* Weather info */}
+                          {stop.temperature_c !== undefined && (
+                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[#33ff33]/70">
+                              <span>{stop.temperature_c.toFixed(1)}°C</span>
+                              <span className="text-[#33ff33]/40">•</span>
+                              <span className="truncate">{stop.weather_condition}</span>
+                              {stop.wind_speed_mps !== undefined && (
+                                <>
+                                  <span className="text-[#33ff33]/40">•</span>
+                                  <span>💨 {stop.wind_speed_mps.toFixed(1)}m/s</span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-[10px] text-[#33ff33]/60">

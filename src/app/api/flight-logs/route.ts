@@ -10,9 +10,9 @@ export async function GET() {
     const publicDir = path.join(process.cwd(), 'public')
     const files = fs.readdirSync(publicDir)
     
-    // Find files matching the pattern YYYY_santa_tracker.csv
+    // Find files matching the pattern YYYY_santa_tracker_weather.csv
     const flightLogs = files
-      .filter(file => /^\d{4}_santa_tracker\.csv$/.test(file))
+      .filter(file => /^\d{4}_santa_tracker_weather\.csv$/.test(file))
       .map(file => {
         const year = parseInt(file.substring(0, 4))
         return {

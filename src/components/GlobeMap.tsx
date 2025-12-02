@@ -16,6 +16,7 @@ interface FlightStop {
   utc_offset?: number
   utc_offset_rounded?: number
   population?: number
+  // Weather data
   temperature_c?: number
   weather_condition?: string
   wind_speed_mps?: number
@@ -130,7 +131,7 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
-export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: GlobeMapProps) {
+export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
