@@ -12,6 +12,16 @@ interface FlightStop {
   utc_time: string
   local_time: string
   timestamp: number
+  timezone?: string
+  utc_offset?: number
+  utc_offset_rounded?: number
+  population?: number
+  // Weather data
+  temperature_c?: number
+  weather_condition?: string
+  wind_speed_mps?: number
+  wind_direction_deg?: number
+  wind_gust_mps?: number
 }
 
 interface GlobeMapProps {
@@ -121,7 +131,7 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
-export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: GlobeMapProps) {
+export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -134,7 +144,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
   const [GlobeComponent, setGlobeComponent] = useState<any>(null)
   const [currentSimTime, setCurrentSimTime] = useState<number>(0)
   const [cameraAltitude, setCameraAltitude] = useState<number>(2)
-  const [flightLogOpen, setFlightLogOpen] = useState(false)
+  const [flightLogOpen, setFlightLogOpen] = useState(true)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -209,7 +219,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
   // Load flight data in background
   useEffect(() => {
     setLoading(true)
-    fetch(dataFile)
+    // Add cache-busting to ensure fresh data
+    fetch(`${dataFile}?t=${Date.now()}`)
       .then(res => res.text())
       .then(csv => {
         const lines = csv.trim().split('\n')
@@ -220,9 +231,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
           const lat = parseFloat(values[3])
           const lng = parseFloat(values[4])
           const utc_time = values[8] || ''
-          
+          const population = values[10] ? parseInt(values[10], 10) : undefined
+          const temperature_c = values[11] ? parseFloat(values[11]) : undefined
+          const weather_condition = values[12] || undefined
+          const wind_speed_mps = values[13] ? parseFloat(values[13]) : undefined
+          const wind_direction_deg = values[14] ? parseFloat(values[14]) : undefined
+          const wind_gust_mps = values[15] ? parseFloat(values[15]) : undefined
+
           if (isNaN(lat) || isNaN(lng)) continue
-          
+
           data.push({
             stop_number: parseInt(values[0]) || i,
             city: values[1] || 'Unknown',
@@ -232,6 +249,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
             utc_time,
             local_time: values[9] || '',
             timestamp: parseUTCTime(utc_time),
+            timezone: values[5] || undefined,
+            utc_offset: values[6] ? parseFloat(values[6]) : undefined,
+            utc_offset_rounded: values[7] ? parseFloat(values[7]) : undefined,
+            population,
+            temperature_c,
+            weather_condition,
+            wind_speed_mps,
+            wind_direction_deg,
+            wind_gust_mps,
           })
         }
         
@@ -589,16 +615,20 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
       >
         {/* Flight Log Trigger Button */}
         <button
-          onClick={() => setFlightLogOpen(true)}
-          className="absolute top-4 right-4 z-[1000] w-10 h-10 flex items-center justify-center bg-black/80 border border-[#33ff33]/50 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors"
+          onClick={() => setFlightLogOpen(!flightLogOpen)}
+          className={`absolute left-4 z-[1000] flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono
+            ${flightLogOpen 
+              ? 'bg-[#33ff33] text-black border-[#33ff33]' 
+              : 'bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black'
+            }`}
           style={{
-            textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
-            top: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+            textShadow: flightLogOpen ? 'none' : '0 0 5px rgba(51, 255, 51, 0.8)',
+            top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)',
           }}
           title="Flight Log"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -607,9 +637,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
             />
           </svg>
+          FLIGHT LOG
         </button>
 
         {/* Globe - shifted up to account for bottom HUD */}
@@ -654,7 +685,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
         }}
       >
-        {currentStop && (
+        {currentStop && !flightLogOpen && (
           <div className="pb-3 text-center text-[#33ff33]">
             <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
               Last verified location
@@ -784,11 +815,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
 
       {/* Flight Log Panel - outside content wrapper so it doesn't get pushed */}
       <FlightLogPanel
+        key={flightLogOpen ? 'log-open' : 'log-closed'}
         isOpen={flightLogOpen}
         onClose={() => setFlightLogOpen(false)}
         stops={stops}
         currentIndex={currentIndex}
         onSelectStop={handleSelectStop}
+        isReplaying={isPlaying}
       />
     </div>
   )

@@ -8,7 +8,11 @@
  * - wind_direction_deg (winddirection_10m)
  * - wind_gust_mps (windgusts_10m, converted from km/h)
  *
- * Usage: npx tsx scripts/add-weather-data.ts
+ * Usage: 
+ *   npx tsx scripts/add-weather-data.ts [--limit N]
+ *
+ * Options:
+ *   --limit N    Only process N location groups (for testing/batching)
  *
  * Environment variables:
  *   OPEN_METEO_API_KEY - Optional API key for paid tier (unlimited daily requests)
@@ -27,9 +31,8 @@ import path from "path";
 config({ path: path.join(process.cwd(), ".env.local") });
 
 // Note: Archive API requires Professional/Enterprise plan
-// Standard plan only works for Forecast API
 // Set this to your Professional plan API key, or leave undefined to use free tier
-const OPEN_METEO_API_KEY = process.env.OPEN_METEO_ARCHIVE_API_KEY;
+const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY;
 
 const INPUT_FILE = path.join(process.cwd(), "public/2024_santa_tracker.csv");
 const OUTPUT_FILE = path.join(
@@ -44,15 +47,23 @@ const PROGRESS_FILE = path.join(
 // Save progress every N groups
 const SAVE_PROGRESS_INTERVAL = 100;
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const limitIndex = args.indexOf('--limit');
+const BATCH_LIMIT = limitIndex !== -1 && args[limitIndex + 1] 
+  ? parseInt(args[limitIndex + 1], 10) 
+  : Infinity;
+
 // Open-Meteo rate limits:
 // Free tier: 600/min, 5,000/hr, 10,000/day
 // Paid tier: Unlimited per day (just monthly quota)
 const IS_PAID_TIER = !!OPEN_METEO_API_KEY;
 const DAILY_QUOTA = IS_PAID_TIER ? Infinity : 10000;
-const DELAY_BETWEEN_REQUESTS_MS = IS_PAID_TIER ? 50 : 120; // Faster for paid tier
+const DELAY_BETWEEN_BATCHES_MS = IS_PAID_TIER ? 0 : 1000; // No delay for paid tier
+const CONCURRENT_REQUESTS = IS_PAID_TIER ? 10 : 1; // 10 concurrent for paid, 1 for free
 const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 5000;
-const RATE_LIMIT_DELAY_MS = 60000;
+const RETRY_DELAY_MS = 10000; // 10 second retry delay
+const RATE_LIMIT_DELAY_MS = 120000; // 2 minute wait when rate limited
 
 interface SantaStop {
   stop_number: string;
@@ -402,114 +413,135 @@ async function main() {
   let errors = 0;
   let skipped = 0;
 
-  console.log("🌤️  Fetching weather data from Open-Meteo Archive API...\n");
+  if (BATCH_LIMIT !== Infinity) {
+    console.log(`🎯 Batch mode: processing up to ${BATCH_LIMIT} new groups\n`);
+  }
 
-  for (let i = 0; i < groupArray.length; i++) {
-    const [key, group] = groupArray[i];
+  console.log("🌤️  Fetching weather data from Open-Meteo Archive API...");
+  console.log(`   Using ${CONCURRENT_REQUESTS} concurrent requests\n`);
 
-    // Skip already processed
-    if (processedKeys.has(key)) {
-      skipped++;
-      continue;
-    }
+  let batchProcessed = 0;
+  let batchLimitReached = false;
+  let quotaReached = false;
 
-    let dateToFetch = group.date;
+  // Filter to only unprocessed groups
+  const unprocessedGroups = groupArray.filter(([key]) => !processedKeys.has(key));
+  skipped = groupArray.length - unprocessedGroups.length;
 
-    // Adjust year if needed
-    if (useHistoricalYear) {
-      const [year, month, day] = dateToFetch.split("-");
-      dateToFetch = `${parseInt(year) + yearOffset}-${month}-${day}`;
-    }
-
-    const data = await fetchWeatherForLocation(
-      group.lat,
-      group.lng,
-      dateToFetch
-    );
-    apiCalls++;
-
-    if (!data || data.error) {
-      errors++;
-    } else {
-      // Get weather for the first stop's hour (all stops in group share similar time)
-      const weather = getWeatherForHour(data, group.stops[0].hour);
-      weatherCache.set(key, weather);
-
-      // Apply weather data to all stops in this group
-      for (const stop of group.stops) {
-        weatherData[stop.index] = weather;
-      }
-    }
-
-    processedKeys.add(key);
-    processed++;
-
-    // Save progress periodically
-    if (processed % SAVE_PROGRESS_INTERVAL === 0) {
+  // Process in batches of CONCURRENT_REQUESTS
+  for (let batchStart = 0; batchStart < unprocessedGroups.length; batchStart += CONCURRENT_REQUESTS) {
+    // Check batch limit before starting new batch
+    if (batchProcessed >= BATCH_LIMIT) {
+      console.log(`\n\n🎯 Batch limit reached (${BATCH_LIMIT} groups).`);
+      console.log(`   Progress saved. Run again to continue.`);
       saveProgress(processedKeys, weatherCache);
-    }
-
-    const percentage = ((processed / groupArray.length) * 100).toFixed(1);
-    process.stdout.write(
-      `\r   Progress: ${processed}/${groupArray.length} groups (${percentage}%) | API: ${apiCalls} | Errors: ${errors}   `
-    );
-
-    // Check if approaching daily quota (leave buffer of 100)
-    if (apiCalls >= DAILY_QUOTA - 100) {
-      console.log(`\n\n⏸️  Approaching daily quota (${apiCalls} API calls).`);
-      console.log(`   Progress saved. Run again tomorrow to continue.`);
-      saveProgress(processedKeys, weatherCache);
+      batchLimitReached = true;
       break;
     }
 
-    // Rate limit between requests
-    await sleep(DELAY_BETWEEN_REQUESTS_MS);
+    // Check if approaching daily quota
+    if (apiCalls >= DAILY_QUOTA - 100) {
+      console.log(`\n\n⏸️  Approaching daily quota (${apiCalls} API calls).`);
+      console.log(`   Progress saved. Run again tomorrow to continue.`);
+      quotaReached = true;
+      break;
+    }
+
+    // Determine how many to process in this batch (respecting batch limit)
+    const remainingInLimit = BATCH_LIMIT - batchProcessed;
+    const batchSize = Math.min(
+      CONCURRENT_REQUESTS,
+      unprocessedGroups.length - batchStart,
+      remainingInLimit
+    );
+
+    const batch = unprocessedGroups.slice(batchStart, batchStart + batchSize);
+
+    // Process batch concurrently
+    const batchPromises = batch.map(async ([key, group]) => {
+      let dateToFetch = group.date;
+
+      // Adjust year if needed
+      if (useHistoricalYear) {
+        const [year, month, day] = dateToFetch.split("-");
+        dateToFetch = `${parseInt(year) + yearOffset}-${month}-${day}`;
+      }
+
+      const data = await fetchWeatherForLocation(
+        group.lat,
+        group.lng,
+        dateToFetch
+      );
+
+      return { key, group, data };
+    });
+
+    // Wait for all requests in batch to complete
+    const results = await Promise.all(batchPromises);
+    apiCalls += results.length;
+
+    // Process results
+    for (const { key, group, data } of results) {
+      if (!data || data.error) {
+        errors++;
+      } else {
+        // Get weather for the first stop's hour (all stops in group share similar time)
+        const weather = getWeatherForHour(data, group.stops[0].hour);
+        weatherCache.set(key, weather);
+
+        // Apply weather data to all stops in this group
+        for (const stop of group.stops) {
+          weatherData[stop.index] = weather;
+        }
+      }
+
+      processedKeys.add(key);
+      processed++;
+      batchProcessed++;
+    }
+
+    // Save progress after each batch
+    saveProgress(processedKeys, weatherCache);
+
+    // Write CSV after each batch so we don't lose data
+    const enrichedStops: EnrichedStop[] = stops.map((stop, idx) => ({
+      ...stop,
+      ...weatherData[idx],
+    }));
+    const csvOutput = stringify(enrichedStops, {
+      header: true,
+      columns: [
+        "stop_number", "city", "country", "lat", "lng", "timezone",
+        "utc_offset", "utc_offset_rounded", "utc_time", "local_time", "population",
+        "temperature_c", "weather_condition", "wind_speed_mps", "wind_direction_deg", "wind_gust_mps",
+      ],
+    });
+    writeFileSync(OUTPUT_FILE, csvOutput);
+
+    const percentage = ((processed / groupArray.length) * 100).toFixed(1);
+    const withWeatherCount = weatherData.filter((w) => w.temperature_c !== "").length;
+    process.stdout.write(
+      `\r   Progress: ${processed}/${groupArray.length} groups (${percentage}%) | Stops with weather: ${withWeatherCount} | Errors: ${errors}   `
+    );
+
+    // Small delay between batches if configured
+    if (DELAY_BETWEEN_BATCHES_MS > 0) {
+      await sleep(DELAY_BETWEEN_BATCHES_MS);
+    }
   }
   console.log(); // New line after progress
 
-  // Final save
-  saveProgress(processedKeys, weatherCache);
-
-  console.log("\n📝 Creating enriched CSV...");
-
-  // Merge weather data with stops
-  const enrichedStops: EnrichedStop[] = stops.map((stop, index) => ({
-    ...stop,
-    ...weatherData[index],
-  }));
-
   // Count stops with weather data
-  const withWeather = enrichedStops.filter((s) => s.temperature_c !== "").length;
+  const withWeather = weatherData.filter((w) => w.temperature_c !== "").length;
 
-  console.log("💾 Writing enriched CSV...");
-  const output = stringify(enrichedStops, {
-    header: true,
-    columns: [
-      "stop_number",
-      "city",
-      "country",
-      "lat",
-      "lng",
-      "timezone",
-      "utc_offset",
-      "utc_offset_rounded",
-      "utc_time",
-      "local_time",
-      "population",
-      "temperature_c",
-      "weather_condition",
-      "wind_speed_mps",
-      "wind_direction_deg",
-      "wind_gust_mps",
-    ],
-  });
-
-  writeFileSync(OUTPUT_FILE, output);
-
-  // Clean up progress file after successful completion
-  if (existsSync(PROGRESS_FILE)) {
-    unlinkSync(PROGRESS_FILE);
-    console.log("   🧹 Cleaned up progress file");
+  console.log("\n📝 CSV saved incrementally after each request.");
+  
+  // Only clean up progress file if we processed ALL groups
+  if (processed >= groupArray.length) {
+    if (existsSync(PROGRESS_FILE)) {
+      unlinkSync(PROGRESS_FILE);
+      console.log("   🧹 Cleaned up progress file (all groups complete)");
+    }
   }
 
   console.log("\n✅ Done!");
