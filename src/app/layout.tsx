@@ -17,6 +17,29 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Santa Tracker",
   description: "Track Santa's journey around the world",
+  metadataBase: new URL("https://santatracker.levinmedia.com"),
+  openGraph: {
+    title: "Santa Tracker",
+    description: "Track Santa's journey around the world",
+    url: "https://santatracker.levinmedia.com",
+    siteName: "Santa Tracker",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Santa Tracker - Track Santa's journey around the world",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Santa Tracker",
+    description: "Track Santa's journey around the world",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
