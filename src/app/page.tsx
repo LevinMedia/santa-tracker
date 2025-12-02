@@ -438,7 +438,7 @@ export default function Home() {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [entries, typingLine, typedChars, showPrompt])
+  }, [entries, typingLine, typedChars, showPrompt, announcementComplete])
 
   // Handle flight log selection from the flight menu
   const handleFlightSelection = useCallback(
