@@ -105,3 +105,26 @@ body {
 .leaflet-control-container {
   display: none !important;
 }
+
+/* Custom scrollbar for retro terminal look */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 255, 51, 0.3) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(51, 255, 51, 0.3);
+  border-radius: 0;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(51, 255, 51, 0.5);
+}

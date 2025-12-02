@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import FlightLogPanel from './FlightLogPanel'
 
 interface FlightStop {
   stop_number: number
@@ -133,6 +134,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
   const [GlobeComponent, setGlobeComponent] = useState<any>(null)
   const [currentSimTime, setCurrentSimTime] = useState<number>(0)
   const [cameraAltitude, setCameraAltitude] = useState<number>(2)
+  const [flightLogOpen, setFlightLogOpen] = useState(false)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -143,6 +145,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
   const animationFrame = useRef<number>(0)
   const speedMenuRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<any>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ width: 800, height: 600 })
 
   // Mission timing
   const missionStart = stops.length > 0 ? stops[0].timestamp : 0
@@ -152,6 +156,33 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
     import('react-globe.gl').then((mod) => {
       setGlobeComponent(() => mod.default)
     })
+  }, [])
+
+  // Track container size for globe resizing
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setContainerSize({ width: rect.width, height: rect.height })
+      }
+    }
+
+    // Initial size
+    updateSize()
+
+    // Watch for resize
+    const resizeObserver = new ResizeObserver(updateSize)
+    resizeObserver.observe(containerRef.current)
+
+    // Also listen for window resize
+    window.addEventListener('resize', updateSize)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateSize)
+    }
   }, [])
 
   // Point globe at North Pole when ready and load data
@@ -415,6 +446,16 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
     setIsPlaying(prev => !prev)
   }, [formatUTCTime, isAtEnd, missionStart])
 
+  // Handle selecting a stop from the flight log
+  const handleSelectStop = useCallback((index: number) => {
+    setCurrentIndex(index)
+    setIsPlaying(false)
+    if (stops[index]) {
+      setCurrentSimTime(stops[index].timestamp)
+      setDisplayTime(stops[index].utc_time)
+    }
+  }, [stops])
+
   // Close speed menu on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -539,13 +580,45 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
 
   return (
     <div className="relative w-full h-full bg-black">
-      {/* Globe - shifted up to account for bottom HUD */}
-      <div className="absolute inset-0" style={{ transform: 'translateY(-10%)' }}>
+      {/* Main content wrapper - shrinks when panel is open (bottom on mobile, right on desktop) */}
+      <div 
+        className={`
+          absolute inset-0 transition-all duration-300 ease-out
+          ${flightLogOpen ? 'bottom-[50vh] md:bottom-0 md:right-96' : 'bottom-0 md:right-0'}
+        `}
+      >
+        {/* Flight Log Trigger Button */}
+        <button
+          onClick={() => setFlightLogOpen(true)}
+          className="absolute top-4 right-4 z-[1000] w-10 h-10 flex items-center justify-center bg-black/80 border border-[#33ff33]/50 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors"
+          style={{
+            textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
+            top: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+          }}
+          title="Flight Log"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 6h16M4 10h16M4 14h16M4 18h16"
+            />
+          </svg>
+        </button>
+
+        {/* Globe - shifted up to account for bottom HUD */}
+        <div ref={containerRef} className="absolute inset-0" style={{ transform: 'translateY(-10%)' }}>
         {GlobeComponent && (
           <GlobeComponent
             ref={globeRef}
-            width={typeof window !== 'undefined' ? window.innerWidth : 800}
-            height={typeof window !== 'undefined' ? window.innerHeight : 600}
+            width={containerSize.width}
+            height={containerSize.height}
             globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
             backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
             pointsData={visitedPoints}
@@ -707,6 +780,16 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
           <span>Elapsed: {elapsedDisplay}</span>
         </div>
       </div>
+      </div>
+
+      {/* Flight Log Panel - outside content wrapper so it doesn't get pushed */}
+      <FlightLogPanel
+        isOpen={flightLogOpen}
+        onClose={() => setFlightLogOpen(false)}
+        stops={stops}
+        currentIndex={currentIndex}
+        onSelectStop={handleSelectStop}
+      />
     </div>
   )
 }

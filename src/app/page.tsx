@@ -83,18 +83,19 @@ function OptionsEntry({
     if (!showCTA || !isActive || visibleButtons >= COMMAND_OPTIONS.length) return
     
     const buttonTimer = setTimeout(() => {
-      setVisibleButtons(prev => {
-        const next = prev + 1
-        onElementAppear?.()
-        if (next >= COMMAND_OPTIONS.length) {
-          onAnnouncementComplete?.()
-        }
-        return next
-      })
+      setVisibleButtons(prev => prev + 1)
+      onElementAppear?.()
     }, 120)
     
     return () => clearTimeout(buttonTimer)
-  }, [showCTA, isActive, visibleButtons, onElementAppear, onAnnouncementComplete])
+  }, [showCTA, isActive, visibleButtons, onElementAppear])
+
+  // Call onAnnouncementComplete when all buttons are visible
+  useEffect(() => {
+    if (isActive && visibleButtons >= COMMAND_OPTIONS.length) {
+      onAnnouncementComplete?.()
+    }
+  }, [isActive, visibleButtons, onAnnouncementComplete])
   
   return (
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
