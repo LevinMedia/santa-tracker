@@ -12,6 +12,15 @@ interface FlightStop {
   utc_time: string
   local_time: string
   timestamp: number
+  timezone?: string
+  utc_offset?: number
+  utc_offset_rounded?: number
+  population?: number
+  temperature_c?: number
+  weather_condition?: string
+  wind_speed_mps?: number
+  wind_direction_deg?: number
+  wind_gust_mps?: number
 }
 
 interface GlobeMapProps {
@@ -220,9 +229,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
           const lat = parseFloat(values[3])
           const lng = parseFloat(values[4])
           const utc_time = values[8] || ''
-          
+          const population = values[10] ? parseInt(values[10], 10) : undefined
+          const temperature_c = values[11] ? parseFloat(values[11]) : undefined
+          const weather_condition = values[12] || undefined
+          const wind_speed_mps = values[13] ? parseFloat(values[13]) : undefined
+          const wind_direction_deg = values[14] ? parseFloat(values[14]) : undefined
+          const wind_gust_mps = values[15] ? parseFloat(values[15]) : undefined
+
           if (isNaN(lat) || isNaN(lng)) continue
-          
+
           data.push({
             stop_number: parseInt(values[0]) || i,
             city: values[1] || 'Unknown',
@@ -232,6 +247,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
             utc_time,
             local_time: values[9] || '',
             timestamp: parseUTCTime(utc_time),
+            timezone: values[5] || undefined,
+            utc_offset: values[6] ? parseFloat(values[6]) : undefined,
+            utc_offset_rounded: values[7] ? parseFloat(values[7]) : undefined,
+            population,
+            temperature_c,
+            weather_condition,
+            wind_speed_mps,
+            wind_direction_deg,
+            wind_gust_mps,
           })
         }
         
@@ -784,6 +808,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: Globe
 
       {/* Flight Log Panel - outside content wrapper so it doesn't get pushed */}
       <FlightLogPanel
+        key={flightLogOpen ? 'log-open' : 'log-closed'}
         isOpen={flightLogOpen}
         onClose={() => setFlightLogOpen(false)}
         stops={stops}
