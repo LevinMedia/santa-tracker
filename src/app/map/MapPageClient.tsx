@@ -31,8 +31,15 @@ interface MapPageClientProps {
   flightParam: string
 }
 
-const FLIGHT_TITLES: Record<string, string> = {
-  'test-flight-1': '2024 / SANTA TRACKER REPLAY',
+// Generate flight title from filename - supports YYYY_santa_tracker format
+function getFlightTitle(filename: string): string {
+  // Check for YYYY_santa_tracker pattern
+  const yearMatch = filename.match(/^(\d{4})_santa_tracker$/)
+  if (yearMatch) {
+    return `${yearMatch[1]} / SANTA TRACKER`
+  }
+  // Fallback: replace underscores/dashes with spaces and uppercase
+  return filename.replace(/[-_]/g, ' ').toUpperCase()
 }
 
 export default function MapPageClient({ flightParam }: MapPageClientProps) {
@@ -40,10 +47,7 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
 
   const flightLogName = useMemo(() => flightParam.replace(/\.csv$/, ''), [flightParam])
   const dataFile = `/${flightLogName}.csv`
-  const flightLogTitle = useMemo(
-    () => FLIGHT_TITLES[flightLogName] ?? flightLogName.replace(/-/g, ' '),
-    [flightLogName]
-  )
+  const flightLogTitle = useMemo(() => getFlightTitle(flightLogName), [flightLogName])
 
   // ESC key to go back
   useEffect(() => {

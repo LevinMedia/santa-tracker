@@ -120,7 +120,7 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
-export default function GlobeMap({ dataFile = '/test-flight-1.csv' }: GlobeMapProps) {
+export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)

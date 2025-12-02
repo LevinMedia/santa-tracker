@@ -4,6 +4,109 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick } from '@/lib/analytics'
 
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back on Christmas Eve. This Christmas, consider giving the gift of life. Donate to St Jude's children's hospital."
+
+// Typewriter component for streaming text
+function TypewriterText({ text, isActive, onComplete }: { text: string; isActive: boolean; onComplete?: () => void }) {
+  const [displayedChars, setDisplayedChars] = useState(isActive ? 0 : text.length)
+  const hasCompletedRef = useRef(!isActive)
+  
+  useEffect(() => {
+    // If not active and never started typing, show full text (historical entry)
+    if (!isActive && !hasCompletedRef.current) {
+      setDisplayedChars(text.length)
+      hasCompletedRef.current = true
+      onComplete?.()
+      return
+    }
+    
+    // If active and not yet completed, start typing
+    if (isActive && !hasCompletedRef.current) {
+      let currentChar = displayedChars
+      const interval = setInterval(() => {
+        currentChar++
+        setDisplayedChars(currentChar)
+        
+        if (currentChar >= text.length) {
+          clearInterval(interval)
+          hasCompletedRef.current = true
+          onComplete?.()
+        }
+      }, 15) // Speed of typing (15ms per character)
+      
+      return () => clearInterval(interval)
+    }
+  }, [isActive, text, displayedChars, onComplete])
+  
+  return <>{text.slice(0, displayedChars)}</>
+}
+
+// Options entry component with typewriter effect
+function OptionsEntry({ 
+  entryId, 
+  isActive, 
+  isProcessing, 
+  onCommand,
+  onAnnouncementComplete
+}: { 
+  entryId: string
+  isActive: boolean
+  isProcessing: boolean
+  onCommand: (key: string) => void
+  onAnnouncementComplete?: () => void
+}) {
+  const [showButtons, setShowButtons] = useState(!isActive)
+  
+  const handleTypewriterComplete = useCallback(() => {
+    setShowButtons(true)
+    onAnnouncementComplete?.()
+  }, [onAnnouncementComplete])
+  
+  return (
+    <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
+      <p className="mb-4">
+        <TypewriterText 
+          text={ANNOUNCEMENT_TEXT} 
+          isActive={isActive} 
+          onComplete={handleTypewriterComplete}
+        />
+      </p>
+      {showButtons && (
+        <>
+          <div>Click, tap or enter command to continue:</div>
+          <div className="mt-3 flex flex-col gap-2">
+            {COMMAND_OPTIONS.map((option, index) => (
+              <div
+                key={`${entryId}-${option.key}`}
+                className="min-h-[1.5em]"
+                style={{ animationDelay: `${index * 0.2}s` }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (option.href === '#' || !isActive) return
+                    trackCommandClick(option.key, option.label)
+                    onCommand(option.key)
+                  }}
+                  className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
+                    option.href === '#' || !isActive
+                      ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
+                      : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
+                  }`}
+                  disabled={isProcessing || option.href === '#' || !isActive}
+                >
+                  <span className="font-bold underline">{option.key}</span>
+                  <span className="ml-3 leading-none">{option.label}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 const ASCII_TITLE = `
   LIVE
  ███████╗ █████╗ ███╗   ██╗████████╗ █████╗ 
@@ -22,7 +125,13 @@ const ASCII_TITLE = `
     MEGA 7000 HD
 `
 
-type EntryKind = 'text' | 'hr' | 'ascii' | 'options' | 'countdown'
+interface FlightLog {
+  year: number
+  filename: string
+  label: string
+}
+
+type EntryKind = 'text' | 'hr' | 'ascii' | 'options' | 'countdown' | 'flight-menu'
 
 interface BootLine {
   text: string
@@ -83,7 +192,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
-  { key: 'P', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
+  { key: 'P', label: 'VIEW PREVIOUS FLIGHTS', href: '/flights', delay: 5400 },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
@@ -100,7 +209,10 @@ export default function Home() {
   const [userInput, setUserInput] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null)
+  const [activeFlightMenuId, setActiveFlightMenuId] = useState<string | null>(null)
+  const [flightLogs, setFlightLogs] = useState<FlightLog[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+  const [announcementComplete, setAnnouncementComplete] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
@@ -164,6 +276,17 @@ export default function Home() {
       kind: 'options',
     })
     setActiveOptionsId(id)
+    setAnnouncementComplete(false)
+    return id
+  }, [appendEntry])
+
+  const appendFlightMenuEntry = useCallback(() => {
+    const id = `flight-menu-${Date.now()}`
+    appendEntry({
+      id,
+      kind: 'flight-menu',
+    })
+    setActiveFlightMenuId(id)
     return id
   }, [appendEntry])
 
@@ -317,21 +440,103 @@ export default function Home() {
     }
   }, [entries, typingLine, typedChars, showPrompt])
 
+  // Handle flight log selection from the flight menu
+  const handleFlightSelection = useCallback(
+    async (flight: FlightLog) => {
+      setIsProcessing(true)
+      setShowPrompt(false)
+      setActiveFlightMenuId(null)
+      
+      appendEntry({
+        id: `flight-select-${Date.now()}`,
+        kind: 'text',
+        text: `> SELECTED: ${flight.year} / SANTA TRACKER`,
+      })
+      
+      await sleep(200)
+      
+      const frames = ['/', '-', '\\', '|']
+      const loadingId = `loading-archive-${Date.now()}`
+      appendEntry({
+        id: loadingId,
+        kind: 'text',
+        text: 'LOADING ARCHIVE / ...',
+      })
+      
+      for (let i = 0; i < 12; i++) {
+        updateEntry(loadingId, `LOADING ARCHIVE ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+        await sleep(120)
+      }
+      
+      appendEntry({
+        id: `archive-ready-${Date.now()}`,
+        kind: 'text',
+        text: `ARCHIVE READY. OPENING ${flight.year} MISSION...`,
+        className: 'mb-10'
+      })
+      
+      appendEntry({
+        id: `divider-${Date.now()}`,
+        kind: 'hr',
+      })
+      
+      await sleep(260)
+      router.push(`/map?flight=${flight.filename}`)
+      
+      appendOptionsEntry()
+      setShowPrompt(true)
+      setIsProcessing(false)
+    },
+    [appendEntry, appendOptionsEntry, router, sleep, updateEntry]
+  )
+
   const handleCommand = useCallback(
     async (cmd: string) => {
       if (!showPrompt || isProcessing) return
 
       const trimmed = cmd.trim()
       const normalized = trimmed.toUpperCase()
+      
+      // Clear input immediately when command is entered
+      setUserInput('')
 
-      if (normalized === '1') {
+      // Check if we're in the flight menu and a number was entered
+      if (activeFlightMenuId && /^\d+$/.test(normalized)) {
+        const flightIndex = parseInt(normalized) - 1
+        if (flightIndex >= 0 && flightIndex < flightLogs.length) {
+          handleFlightSelection(flightLogs[flightIndex])
+          return
+        }
+      }
+      
+      // Handle "B" to go back from flight menu
+      if (activeFlightMenuId && normalized === 'B') {
+        setActiveFlightMenuId(null)
+        setUserInput('')
+        appendEntry({
+          id: `back-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [B] BACK',
+          className: 'mb-10'
+        })
+        await sleep(200)
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+        appendOptionsEntry()
+        setShowPrompt(true)
+        return
+      }
+
+      if (normalized === '1' || normalized === 'P') {
         setIsProcessing(true)
         setShowPrompt(false)
         setActiveOptionsId(null)
         appendEntry({
           id: `cmd-1-${Date.now()}`,
           kind: 'text',
-          text: '> COMMAND [1] VIEW PREVIOUS FLIGHTS',
+          text: '> COMMAND [P] VIEW PREVIOUS FLIGHTS',
         })
         await sleep(200)
 
@@ -340,37 +545,59 @@ export default function Home() {
         appendEntry({
           id: loadingId,
           kind: 'text',
-          text: 'LOADING FLIGHT LOGS / ...',
+          text: 'LOADING HISTORICAL FLIGHT LOGS / ...',
         })
 
+        // Fetch available flight logs while showing animation
+        let logs: FlightLog[] = []
+        const fetchPromise = fetch('/api/flight-logs')
+          .then(res => res.json())
+          .then(data => {
+            logs = data.flightLogs || []
+          })
+          .catch(() => {
+            logs = []
+          })
+
         for (let i = 0; i < 18; i++) {
-          updateEntry(loadingId, `LOADING FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+          updateEntry(loadingId, `LOADING HISTORICAL FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
           await sleep(140)
+        }
+        
+        await fetchPromise
+        setFlightLogs(logs)
+        
+        if (logs.length === 0) {
+          appendEntry({
+            id: `no-logs-${Date.now()}`,
+            kind: 'text',
+            text: 'NO HISTORICAL FLIGHT LOGS FOUND.',
+          })
+          await sleep(500)
+          appendEntry({
+            id: `divider-${Date.now()}`,
+            kind: 'hr',
+          })
+          appendOptionsEntry()
+          setShowPrompt(true)
+          setIsProcessing(false)
+          return
         }
 
         appendEntry({
-          id: `flight-available-${Date.now()}`,
+          id: `found-logs-${Date.now()}`,
           kind: 'text',
-          text: 'AVAILABLE ARCHIVES: 2024 / SANTA GLOBAL RUN',
-        })
-
-        appendEntry({
-          id: `ready-${Date.now()}`,
-          kind: 'text',
-          text: 'ARCHIVE READY. OPENING 2024 MISSION...',
+          text: `FOUND ${logs.length} HISTORICAL FLIGHT LOG${logs.length > 1 ? 'S' : ''}.`,
           className: 'mb-10'
         })
-
-        appendEntry({
-          id: `divider-${Date.now()}`,
-          kind: 'hr',
-        })
-
-        await sleep(260)
-        router.push('/map')
-
-        appendOptionsEntry()
+        
+        await sleep(300)
+        
+        appendFlightMenuEntry()
+        setUserInput('')
         setShowPrompt(true)
+        setIsProcessing(false)
+        return
       } else if (normalized === 'S') {
         setIsProcessing(true)
         setShowPrompt(false)
@@ -392,6 +619,7 @@ export default function Home() {
             id: `share-success-${Date.now()}`,
             kind: 'text',
             text: 'SANTA TRACKER LINK COPIED TO CLIPBOARD.',
+            className: 'mb-10'
           })
         } catch (error) {
           console.error('Failed to copy share link', error)
@@ -399,6 +627,7 @@ export default function Home() {
             id: `share-fail-${Date.now()}`,
             kind: 'text',
             text: 'FAILED TO COPY LINK. PLEASE TRY AGAIN.',
+            className: 'mb-10'
           })
         }
 
@@ -465,7 +694,7 @@ export default function Home() {
           {
             id: `shutdown-message-${Date.now()}`,
             kind: 'text',
-            text: 'Refresh your browser to to restart the application with the blinking ready prompt below.',
+            text: 'Refresh your browser to to restart the application.',
           },
         ])
 
@@ -501,10 +730,9 @@ export default function Home() {
         setShowPrompt(true)
       }
 
-      setUserInput('')
       setIsProcessing(false)
     },
-    [appendEntry, appendOptionsEntry, isProcessing, router, showPrompt, sleep, updateEntry],
+    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
@@ -574,43 +802,73 @@ export default function Home() {
               )
             }
 
-            if (entry.kind === 'options') {
-              const isActiveOptions = entry.id === activeOptionsId
+            if (entry.kind === 'flight-menu') {
+              const isActiveFlightMenu = entry.id === activeFlightMenuId
               return (
                 <div key={entry.id} className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
-                  <p className="mb-4">
-                    2025 Santa Tracker will activate on or around December 25th, 2025. Check back on Christmas Eve. This Christmas,
-                    consider giving the gift of life. Donate to St Jude’s children’s hospital.
-                  </p>
-                  <div>Click, tap or enter command to continue:</div>
+                  <div>Select a flight log to replay:</div>
                   <div className="mt-3 flex flex-col gap-2">
-                    {COMMAND_OPTIONS.map((option, index) => (
+                    {flightLogs.map((flight, index) => (
                       <div
-                        key={`${entry.id}-${option.key}`}
+                        key={`${entry.id}-flight-${flight.year}`}
                         className="min-h-[1.5em]"
-                        style={{ animationDelay: `${index * 0.2}s` }}
+                        style={{ animationDelay: `${index * 0.15}s` }}
                       >
                         <button
                           type="button"
                           onClick={() => {
-                            if (option.href === '#' || !isActiveOptions) return
-                            trackCommandClick(option.key, option.label)
-                            handleCommand(option.key)
+                            if (!isActiveFlightMenu) return
+                            handleFlightSelection(flight)
                           }}
                           className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
-                            option.href === '#' || !isActiveOptions
+                            !isActiveFlightMenu
                               ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
                               : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
                           }`}
-                          disabled={isProcessing || option.href === '#' || !isActiveOptions}
+                          disabled={isProcessing || !isActiveFlightMenu}
                         >
-                          <span className="font-bold underline">{option.key}</span>
-                          <span className="ml-3 leading-none">{option.label}</span>
+                          <span className="font-bold underline">{index + 1}</span>
+                          <span className="ml-3 leading-none">{flight.year} / SANTA TRACKER</span>
                         </button>
                       </div>
                     ))}
+                    <div
+                      className="min-h-[1.5em]"
+                      style={{ animationDelay: `${flightLogs.length * 0.15}s` }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isActiveFlightMenu) return
+                          handleCommand('B')
+                        }}
+                        className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
+                          !isActiveFlightMenu
+                            ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
+                            : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
+                        }`}
+                        disabled={isProcessing || !isActiveFlightMenu}
+                      >
+                        <span className="font-bold underline">B</span>
+                        <span className="ml-3 leading-none">BACK TO MAIN MENU</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
+              )
+            }
+
+            if (entry.kind === 'options') {
+              const isActiveOptions = entry.id === activeOptionsId
+              return (
+                <OptionsEntry
+                  key={entry.id}
+                  entryId={entry.id}
+                  isActive={isActiveOptions}
+                  isProcessing={isProcessing}
+                  onCommand={handleCommand}
+                  onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
+                />
               )
             }
 
@@ -654,7 +912,7 @@ export default function Home() {
         </div>
 
         {/* Input prompt */}
-        {showPrompt && (
+        {showPrompt && (!activeOptionsId || announcementComplete) && (
           <div className="mt-6 text-[#33ff33] text-sm sm:text-base animate-fadeIn">
             <span>READY. </span>
             <span>{userInput}</span>

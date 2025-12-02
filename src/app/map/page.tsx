@@ -7,7 +7,7 @@ interface MapPageProps {
 }
 
 export default function MapPage({ searchParams }: MapPageProps) {
-  const flightParam = searchParams.flight || 'test-flight-1'
+  const flightParam = searchParams.flight || '2024_santa_tracker'
 
   return <MapPageClient flightParam={flightParam} />
 }

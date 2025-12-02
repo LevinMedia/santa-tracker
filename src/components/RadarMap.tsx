@@ -176,7 +176,7 @@ const SPEED_OPTIONS = [
   { value: 300, label: 'MAX' },
 ]
 
-export default function RadarMap({ dataFile = '/test-flight-1.csv' }: RadarMapProps) {
+export default function RadarMap({ dataFile = '/2024_santa_tracker.csv' }: RadarMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
