@@ -84,6 +84,7 @@ const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
   { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
   { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
+  { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
 
@@ -366,6 +367,46 @@ export default function Home() {
 
         await sleep(260)
         router.push('/map')
+
+        appendOptionsEntry()
+        setShowPrompt(true)
+      } else if (normalized === 'S') {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+
+        appendEntry({
+          id: `cmd-s-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [S] SHARE SANTA TRACKER',
+        })
+
+        await sleep(200)
+
+        try {
+          const shareLink = typeof window !== 'undefined' ? window.location.href : ''
+          await navigator.clipboard.writeText(shareLink)
+
+          appendEntry({
+            id: `share-success-${Date.now()}`,
+            kind: 'text',
+            text: 'SANTA TRACKER LINK COPIED TO CLIPBOARD.',
+          })
+        } catch (error) {
+          console.error('Failed to copy share link', error)
+          appendEntry({
+            id: `share-fail-${Date.now()}`,
+            kind: 'text',
+            text: 'FAILED TO COPY LINK. PLEASE TRY AGAIN.',
+          })
+        }
+
+        await sleep(3000)
+
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
 
         appendOptionsEntry()
         setShowPrompt(true)
