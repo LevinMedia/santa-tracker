@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Crimson_Pro, JetBrains_Mono } from "next/font/google";
+import { VercelAnalytics } from "@/components/VercelAnalytics";
 import "./globals.css";
 
 const crimsonPro = Crimson_Pro({
@@ -29,6 +30,7 @@ export default function RootLayout({
         className={`${crimsonPro.variable} ${jetbrainsMono.variable} antialiased`}
       >
         {children}
+        <VercelAnalytics />
       </body>
     </html>
   );

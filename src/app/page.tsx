@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { trackCommandClick } from '@/lib/analytics'
 
 const ASCII_TITLE = `
   LIVE
@@ -82,8 +83,8 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
-  { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
-  { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
+  { key: 'P', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
+  { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
@@ -591,7 +592,11 @@ export default function Home() {
                       >
                         <button
                           type="button"
-                          onClick={() => option.href !== '#' && isActiveOptions && handleCommand(option.key)}
+                          onClick={() => {
+                            if (option.href === '#' || !isActiveOptions) return
+                            trackCommandClick(option.key, option.label)
+                            handleCommand(option.key)
+                          }}
                           className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
                             option.href === '#' || !isActiveOptions
                               ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
