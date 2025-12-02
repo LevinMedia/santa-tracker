@@ -31,6 +31,7 @@ interface FlightLogPanelProps {
   stops: FlightStop[]
   currentIndex: number
   onSelectStop: (index: number) => void
+  isReplaying?: boolean
 }
 
 // Number of items to load per batch
@@ -42,6 +43,7 @@ export default function FlightLogPanel({
   stops,
   currentIndex,
   onSelectStop,
+  isReplaying = false,
 }: FlightLogPanelProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -52,8 +54,25 @@ export default function FlightLogPanel({
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   
+  // Track if we've entered replay mode (persists even when paused)
+  const [inReplayMode, setInReplayMode] = useState(false)
+  
   // Freedom Units™ toggle (imperial measurements)
   const [useFreedomUnits, setUseFreedomUnits] = useState(false)
+  
+  // Draggable window state (desktop only)
+  const [windowPosition, setWindowPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const dragStartRef = useRef({ x: 0, y: 0, windowX: 0, windowY: 0 })
+  
+  // Track desktop breakpoint
+  useEffect(() => {
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 768)
+    checkDesktop()
+    window.addEventListener('resize', checkDesktop)
+    return () => window.removeEventListener('resize', checkDesktop)
+  }, [])
   
   // Load freedom units preference from localStorage
   useEffect(() => {
@@ -132,37 +151,66 @@ export default function FlightLogPanel({
     }
   }, [stops, searchParams, onSelectStop])
 
-  // Reset state when the drawer opens so nothing is pre-selected and lazy loading restarts
-  // (unless there's a stop param in the URL - that's handled by the URL effect)
+  // Track previous isOpen state to detect fresh opens
+  const prevIsOpenRef = useRef(isOpen)
+  
+  // Reset state when the drawer opens fresh (not when searchParams changes while open)
   useEffect(() => {
-    if (isOpen) {
+    const wasJustOpened = isOpen && !prevIsOpenRef.current
+    prevIsOpenRef.current = isOpen
+    
+    if (wasJustOpened) {
       setLoadedCount(BATCH_SIZE)
       setSearchQuery('')
+      setInReplayMode(false) // Reset replay mode on fresh open
       // Only clear selected stop if there's no stop in URL
       if (!searchParams.get('stop')) {
         setSelectedStop(null)
       }
     }
   }, [isOpen, searchParams])
+  
+  // Enter replay mode when replay starts OR when user scrubs to a position not at the end
+  // (and stay in it until drawer closes)
+  useEffect(() => {
+    if (isReplaying) {
+      setInReplayMode(true)
+    }
+  }, [isReplaying])
 
-  // Reverse chronological order (most recent first = highest index first)
-  const reversedStops = useMemo(() => {
-    return [...stops].reverse()
-  }, [stops])
+  // Also enter replay mode when currentIndex changes to a position before the end
+  useEffect(() => {
+    if (stops.length > 0 && currentIndex < stops.length - 1) {
+      setInReplayMode(true)
+    }
+  }, [currentIndex, stops.length])
+
+  // Build the base list depending on mode
+  const baseStops = useMemo(() => {
+    if (inReplayMode) {
+      // In replay mode: only show visited stops (0 to currentIndex), newest visited at top
+      // This creates a "live feed" effect - new stops appear at top, push older down
+      const visitedStops = stops.slice(0, currentIndex + 1)
+      return [...visitedStops].reverse() // Most recently visited at top
+    } else {
+      // Browsing: all stops, most recent (highest index) first
+      return [...stops].reverse()
+    }
+  }, [stops, currentIndex, inReplayMode])
 
   // Filter by search query
   const filteredStops = useMemo(() => {
-    if (!searchQuery.trim()) return reversedStops
+    if (!searchQuery.trim()) return baseStops
     const query = searchQuery.toLowerCase()
-    return reversedStops.filter(
+    return baseStops.filter(
       (stop) =>
         stop.city.toLowerCase().includes(query) ||
         stop.country.toLowerCase().includes(query) ||
         stop.stop_number.toString().includes(query)
     )
-  }, [reversedStops, searchQuery])
+  }, [baseStops, searchQuery])
 
-  // Lazy load - only show loadedCount items
+  // Lazy load - scroll down for more
   const visibleStops = useMemo(() => {
     return filteredStops.slice(0, loadedCount)
   }, [filteredStops, loadedCount])
@@ -187,35 +235,97 @@ export default function FlightLogPanel({
     }
   }, [loadedCount, filteredStops.length])
 
-  // Handle escape key
+  // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
         onClose()
+        return
+      }
+      
+      // Arrow key navigation when panel is open and not actively replaying
+      // Down = next visual item (earlier stop), Up = previous visual item (later stop)
+      if (isOpen && !isReplaying && !selectedStop) {
+        if (e.key === 'ArrowDown' && currentIndex > 0) {
+          e.preventDefault()
+          onSelectStop(currentIndex - 1)
+        } else if (e.key === 'ArrowUp' && currentIndex < stops.length - 1) {
+          e.preventDefault()
+          onSelectStop(currentIndex + 1)
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, isReplaying, currentIndex, stops.length, onSelectStop, selectedStop])
 
   const handleStopClick = useCallback(
     (stop: FlightStop) => {
       // Find the original index in the stops array
       const originalIndex = stops.findIndex((s) => s.stop_number === stop.stop_number)
       if (originalIndex !== -1) {
-        onSelectStop(originalIndex)
+        // During replay, just open the detail modal without jumping the globe
+        // When browsing, jump to that stop on the globe
+        if (!isReplaying) {
+          onSelectStop(originalIndex)
+        }
         setSelectedStop(stop)
         updateUrlWithStop(stop.stop_number)
       }
     },
-    [stops, onSelectStop, updateUrlWithStop]
+    [stops, onSelectStop, updateUrlWithStop, isReplaying]
   )
   
   // Close detail modal and clear URL param
   const handleCloseDetail = useCallback(() => {
     setSelectedStop(null)
     updateUrlWithStop(null)
+    // Reset window position when closing
+    setWindowPosition({ x: 0, y: 0 })
   }, [updateUrlWithStop])
+
+  // Draggable window handlers (desktop only)
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Only enable dragging on desktop
+    if (!isDesktop) return
+    
+    setIsDragging(true)
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      windowX: windowPosition.x,
+      windowY: windowPosition.y,
+    }
+    e.preventDefault()
+  }, [windowPosition, isDesktop])
+
+  const handleDragMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return
+    
+    const deltaX = e.clientX - dragStartRef.current.x
+    const deltaY = e.clientY - dragStartRef.current.y
+    
+    setWindowPosition({
+      x: dragStartRef.current.windowX + deltaX,
+      y: dragStartRef.current.windowY + deltaY,
+    })
+  }, [isDragging])
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  // Add/remove mouse event listeners for dragging
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDragMove)
+      window.addEventListener('mouseup', handleDragEnd)
+      return () => {
+        window.removeEventListener('mousemove', handleDragMove)
+        window.removeEventListener('mouseup', handleDragEnd)
+      }
+    }
+  }, [isDragging, handleDragMove, handleDragEnd])
 
   // Get previous and next stops for navigation
   const getAdjacentStops = useCallback(() => {
@@ -229,15 +339,18 @@ export default function FlightLogPanel({
 
   const { prev: prevStop, next: nextStop } = getAdjacentStops()
 
-  // Navigate to a specific stop
+  // Navigate to a specific stop (in detail modal)
   const navigateToStop = useCallback((stop: FlightStop) => {
     const originalIndex = stops.findIndex(s => s.stop_number === stop.stop_number)
     if (originalIndex !== -1) {
-      onSelectStop(originalIndex)
+      // During replay, just show the detail without jumping the globe
+      if (!isReplaying) {
+        onSelectStop(originalIndex)
+      }
       setSelectedStop(stop)
       updateUrlWithStop(stop.stop_number)
     }
-  }, [stops, onSelectStop, updateUrlWithStop])
+  }, [stops, onSelectStop, updateUrlWithStop, isReplaying])
 
   // Swipe handling for touch devices
   const touchStartX = useRef<number | null>(null)
@@ -340,9 +453,10 @@ export default function FlightLogPanel({
             </div>
             <button
               onClick={onClose}
-              className="w-6 h-6 flex items-center justify-center text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors border border-[#33ff33]/50 text-xs"
+              className="flex items-center gap-1.5 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors border border-[#33ff33]/50 text-xs px-2 py-1"
             >
-              ✕
+              <span>✕</span>
+              <span>CLOSE</span>
             </button>
           </div>
 
@@ -407,45 +521,53 @@ export default function FlightLogPanel({
                   )
                   const isVisited = originalIndex <= currentIndex
                   const isCurrent = originalIndex === currentIndex
+                  const isSelected = selectedStop?.stop_number === stop.stop_number
 
                   return (
                     <button
                       key={stop.stop_number}
                       onClick={() => handleStopClick(stop)}
                       className={`
-                        w-full text-left px-3 py-2.5 transition-colors
-                        ${isCurrent 
-                          ? 'bg-[#33ff33]/20 border-l-2 border-[#33ff33]' 
-                          : isVisited 
-                            ? 'hover:bg-[#33ff33]/10 border-l-2 border-transparent' 
-                            : 'opacity-40 hover:bg-[#33ff33]/5 border-l-2 border-transparent'
+                        w-full text-left px-3 py-2.5 transition-colors border-l-2
+                        ${isSelected
+                          ? 'bg-[#33ff33] text-black border-[#33ff33]'
+                          : isCurrent 
+                            ? 'bg-[#33ff33]/20 border-[#33ff33]' 
+                            : isVisited 
+                              ? 'bg-[#33ff33]/5 border-[#33ff33]/30 hover:bg-[#33ff33]/10' 
+                              : 'opacity-40 border-transparent hover:bg-[#33ff33]/5'
                         }
                       `}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-[#33ff33]/50 font-mono">
+                            <span className={`text-[10px] font-mono ${isSelected ? 'text-black/60' : 'text-[#33ff33]/50'}`}>
                               #{stop.stop_number.toString().padStart(5, '0')}
                             </span>
-                            {isCurrent && (
+                            {isCurrent && !isSelected && (
                               <span className="text-[8px] bg-[#33ff33] text-black px-1 py-0.5 uppercase tracking-wider">
-                                Current
+                                Last Verified Location
+                              </span>
+                            )}
+                            {isSelected && (
+                              <span className="text-[8px] bg-black text-[#33ff33] px-1 py-0.5 uppercase tracking-wider">
+                                Viewing
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-[#33ff33] truncate mt-0.5">
+                          <div className={`text-sm truncate mt-0.5 ${isSelected ? 'text-black' : 'text-[#33ff33]'}`}>
                             {stop.city}
                           </div>
-                          <div className="text-[10px] text-[#33ff33]/50 uppercase tracking-wider">
+                          <div className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-black/60' : 'text-[#33ff33]/50'}`}>
                             {stop.country}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className="text-[10px] text-[#33ff33]/60">
+                          <div className={`text-[10px] ${isSelected ? 'text-black/70' : 'text-[#33ff33]/60'}`}>
                             {formatTime(stop.utc_time)}
                           </div>
-                          <div className="text-[8px] text-[#33ff33]/30 uppercase">
+                          <div className={`text-[8px] uppercase ${isSelected ? 'text-black/50' : 'text-[#33ff33]/30'}`}>
                             UTC
                           </div>
                         </div>
@@ -453,7 +575,7 @@ export default function FlightLogPanel({
                     </button>
                     )
                   })}
-
+                  
                   {/* Load more sentinel */}
                   {loadedCount < filteredStops.length && (
                     <div
@@ -472,27 +594,39 @@ export default function FlightLogPanel({
           <div className="flex-shrink-0 px-3 py-1.5 border-t border-[#33ff33]/30 bg-[#33ff33]/5">
             <div className="flex justify-between text-[10px] text-[#33ff33]/40 uppercase tracking-wider">
               <span>
-                Showing {visibleStops.length} of {filteredStops.length}
+                {inReplayMode 
+                  ? `${currentIndex + 1} stops visited${!isReplaying ? ' • Paused' : ''}`
+                  : `Showing ${visibleStops.length} of ${filteredStops.length}`
+                }
               </span>
-              <span>↕ Scroll for more</span>
+              {!inReplayMode && loadedCount < filteredStops.length && (
+                <span>↓ Scroll for more</span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {selectedStop && (
-        <div className="fixed inset-0 z-[1003] flex items-center justify-center md:px-4 font-mono">
+        <div className="fixed inset-0 z-[1003] flex items-center justify-center md:items-start md:justify-center md:pt-16 md:pointer-events-none font-mono">
+          {/* Mobile backdrop only */}
           <div
-            className="absolute inset-0 bg-black/70 hidden md:block"
+            className="absolute inset-0 bg-black/70 md:hidden"
             onClick={handleCloseDetail}
           />
           <div 
-            className="relative w-full h-full md:h-auto md:max-w-xl bg-black md:border border-[#33ff33]/50 md:shadow-2xl md:shadow-[#33ff33]/20 flex flex-col"
+            className="relative w-full h-full md:h-auto md:max-w-xl md:max-h-[calc(100vh-8rem)] bg-black md:border border-[#33ff33]/50 md:shadow-2xl md:shadow-[#33ff33]/20 flex flex-col md:pointer-events-auto md:rounded-lg"
+            style={isDesktop ? {
+              transform: `translate(${windowPosition.x}px, ${windowPosition.y}px)`,
+            } : undefined}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#33ff33]/40 bg-[#33ff33]/10">
+            <div 
+              className={`flex items-center justify-between px-4 py-3 border-b border-[#33ff33]/40 bg-[#33ff33]/10 md:rounded-t-lg ${isDragging ? 'cursor-grabbing' : 'md:cursor-grab'}`}
+              onMouseDown={handleDragStart}
+            >
               <div>
                 <div className="text-xs text-[#33ff33]/60 uppercase tracking-wider">
                   Stop #{selectedStop.stop_number.toString().padStart(5, '0')}

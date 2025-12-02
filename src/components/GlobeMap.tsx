@@ -144,7 +144,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   const [GlobeComponent, setGlobeComponent] = useState<any>(null)
   const [currentSimTime, setCurrentSimTime] = useState<number>(0)
   const [cameraAltitude, setCameraAltitude] = useState<number>(2)
-  const [flightLogOpen, setFlightLogOpen] = useState(false)
+  const [flightLogOpen, setFlightLogOpen] = useState(true)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -615,16 +615,20 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
       >
         {/* Flight Log Trigger Button */}
         <button
-          onClick={() => setFlightLogOpen(true)}
-          className="absolute top-4 right-4 z-[1000] w-10 h-10 flex items-center justify-center bg-black/80 border border-[#33ff33]/50 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors"
+          onClick={() => setFlightLogOpen(!flightLogOpen)}
+          className={`absolute left-4 z-[1000] flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono
+            ${flightLogOpen 
+              ? 'bg-[#33ff33] text-black border-[#33ff33]' 
+              : 'bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black'
+            }`}
           style={{
-            textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
-            top: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+            textShadow: flightLogOpen ? 'none' : '0 0 5px rgba(51, 255, 51, 0.8)',
+            top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)',
           }}
           title="Flight Log"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -633,9 +637,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M4 6h16M4 10h16M4 14h16M4 18h16"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
             />
           </svg>
+          FLIGHT LOG
         </button>
 
         {/* Globe - shifted up to account for bottom HUD */}
@@ -680,7 +685,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
         }}
       >
-        {currentStop && (
+        {currentStop && !flightLogOpen && (
           <div className="pb-3 text-center text-[#33ff33]">
             <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
               Last verified location
@@ -816,6 +821,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
         stops={stops}
         currentIndex={currentIndex}
         onSelectStop={handleSelectStop}
+        isReplaying={isPlaying}
       />
     </div>
   )
