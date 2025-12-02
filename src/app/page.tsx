@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick } from '@/lib/analytics'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back on Christmas Eve. This Christmas, consider giving the gift of life. Donate to St Jude's children's hospital."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
 // Typewriter component for streaming text
 function TypewriterText({ text, isActive, onComplete }: { text: string; isActive: boolean; onComplete?: () => void }) {
