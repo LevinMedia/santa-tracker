@@ -30,6 +30,9 @@ interface FlightLogPanelProps {
   onSelectStop: (index: number) => void
 }
 
+// Number of items to load per batch
+const BATCH_SIZE = 50
+
 export default function FlightLogPanel({
   isOpen,
   onClose,
@@ -38,8 +41,20 @@ export default function FlightLogPanel({
   onSelectStop,
 }: FlightLogPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [loadedCount, setLoadedCount] = useState(BATCH_SIZE)
   const listRef = useRef<HTMLDivElement>(null)
   const [selectedStop, setSelectedStop] = useState<FlightStop | null>(null)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Reset state when the drawer opens so nothing is pre-selected and lazy loading restarts
+  useEffect(() => {
+    if (isOpen) {
+      setLoadedCount(BATCH_SIZE)
+      setSearchQuery('')
+      setSelectedStop(null)
+    }
+  }, [isOpen])
 
   // Reverse chronological order (most recent first = highest index first)
   const reversedStops = useMemo(() => {
@@ -57,6 +72,31 @@ export default function FlightLogPanel({
         stop.stop_number.toString().includes(query)
     )
   }, [reversedStops, searchQuery])
+
+  // Lazy load - only show loadedCount items
+  const visibleStops = useMemo(() => {
+    return filteredStops.slice(0, loadedCount)
+  }, [filteredStops, loadedCount])
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!loadMoreRef.current) return
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && loadedCount < filteredStops.length) {
+          setLoadedCount((prev) => Math.min(prev + BATCH_SIZE, filteredStops.length))
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    observerRef.current.observe(loadMoreRef.current)
+
+    return () => {
+      observerRef.current?.disconnect()
+    }
+  }, [loadedCount, filteredStops.length])
 
   // Handle escape key
   useEffect(() => {
@@ -149,6 +189,7 @@ export default function FlightLogPanel({
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
+                  setLoadedCount(BATCH_SIZE) // Reset lazy load on search
                 }}
                 placeholder="SEARCH CITY, COUNTRY, OR STOP #..."
                 className="w-full bg-black border border-[#33ff33]/50 text-[#33ff33] text-[16px] md:text-xs px-3 py-2 pl-8 placeholder-[#33ff33]/30 focus:outline-none focus:border-[#33ff33]"
@@ -183,14 +224,14 @@ export default function FlightLogPanel({
           </div>
 
           {/* Stops List */}
-          <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin">
-            {filteredStops.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-[#33ff33]/40 text-xs">
-                {searchQuery ? 'No stops found' : 'No flight data'}
-              </div>
-            ) : (
-              <div className="divide-y divide-[#33ff33]/10">
-                {filteredStops.map((stop) => {
+            <div ref={listRef} className="flex-1 overflow-y-auto scrollbar-thin">
+              {visibleStops.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-[#33ff33]/40 text-xs">
+                  {searchQuery ? 'No stops found' : 'No flight data'}
+                </div>
+              ) : (
+                <div className="divide-y divide-[#33ff33]/10">
+                  {visibleStops.map((stop) => {
                   const originalIndex = stops.findIndex(
                     (s) => s.stop_number === stop.stop_number
                   )
@@ -240,18 +281,28 @@ export default function FlightLogPanel({
                         </div>
                       </div>
                     </button>
-                  )
-                })}
+                    )
+                  })}
 
-              </div>
-            )}
-          </div>
+                  {/* Load more sentinel */}
+                  {loadedCount < filteredStops.length && (
+                    <div
+                      ref={loadMoreRef}
+                      className="py-4 text-center text-[#33ff33]/40 text-xs"
+                    >
+                      <div className="animate-pulse">Loading more...</div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+            </div>
 
           {/* Status Bar */}
           <div className="flex-shrink-0 px-3 py-1.5 border-t border-[#33ff33]/30 bg-[#33ff33]/5">
             <div className="flex justify-between text-[10px] text-[#33ff33]/40 uppercase tracking-wider">
               <span>
-                Showing {filteredStops.length} stop{filteredStops.length === 1 ? '' : 's'}
+                Showing {visibleStops.length} of {filteredStops.length}
               </span>
               <span>↕ Scroll for more</span>
             </div>
