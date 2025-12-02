@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { trackCommandClick } from '@/lib/analytics'
+import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 
 const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
@@ -504,6 +504,8 @@ export default function Home() {
       setIsProcessing(true)
       setShowPrompt(false)
       setActiveFlightMenuId(null)
+      
+      trackFlightSelected(flight.year, flight.filename)
       
       appendEntry({
         id: `flight-select-${Date.now()}`,
