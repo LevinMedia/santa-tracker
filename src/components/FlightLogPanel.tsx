@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Switch } from '@headlessui/react'
 
 interface FlightStop {
   stop_number: number
@@ -41,21 +43,107 @@ export default function FlightLogPanel({
   currentIndex,
   onSelectStop,
 }: FlightLogPanelProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [searchQuery, setSearchQuery] = useState('')
   const [loadedCount, setLoadedCount] = useState(BATCH_SIZE)
   const listRef = useRef<HTMLDivElement>(null)
   const [selectedStop, setSelectedStop] = useState<FlightStop | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  
+  // Freedom Units™ toggle (imperial measurements)
+  const [useFreedomUnits, setUseFreedomUnits] = useState(false)
+  
+  // Load freedom units preference from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('useFreedomUnits')
+    if (stored !== null) {
+      setUseFreedomUnits(stored === 'true')
+    }
+  }, [])
+  
+  // Save freedom units preference to localStorage
+  const handleFreedomUnitsChange = (enabled: boolean) => {
+    setUseFreedomUnits(enabled)
+    localStorage.setItem('useFreedomUnits', String(enabled))
+  }
+  
+  // Unit conversion functions
+  const celsiusToFahrenheit = (c: number) => (c * 9/5) + 32
+  const mpsToMph = (mps: number) => mps * 2.237
+
+  // Wind direction formatting
+  const getCardinalDirection = (degrees: number): string => {
+    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+    const index = Math.round(degrees / 22.5) % 16
+    return directions[index]
+  }
+
+  // Arrow rotation: ➤ points right by default, rotate based on wind direction
+  // Wind direction is where wind comes FROM, arrow shows where it goes TO
+  const getWindArrowRotation = (degrees: number): number => {
+    // Add 90° because ➤ points right (East) but 0° is North
+    return (degrees + 90) % 360
+  }
+
+  const formatWindDirection = (degrees: number): React.ReactNode => {
+    const cardinal = getCardinalDirection(degrees)
+    const rotation = getWindArrowRotation(degrees)
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        {cardinal}
+        <span 
+          className="text-base font-bold leading-none"
+          style={{ transform: `rotate(${rotation}deg)`, display: 'inline-block' }}
+        >➤</span>
+        ({degrees.toFixed(0)}°)
+      </span>
+    )
+  }
+
+  // Update URL with stop number (for sharing/deep linking)
+  const updateUrlWithStop = useCallback((stopNumber: number | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (stopNumber !== null) {
+      params.set('stop', stopNumber.toString())
+    } else {
+      params.delete('stop')
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`
+    router.replace(newUrl, { scroll: false })
+  }, [router, searchParams])
+
+  // Open stop from URL parameter on load
+  useEffect(() => {
+    if (stops.length === 0) return
+    
+    const stopParam = searchParams.get('stop')
+    if (stopParam) {
+      const stopNumber = parseInt(stopParam, 10)
+      const stop = stops.find(s => s.stop_number === stopNumber)
+      if (stop) {
+        setSelectedStop(stop)
+        const originalIndex = stops.findIndex(s => s.stop_number === stopNumber)
+        if (originalIndex !== -1) {
+          onSelectStop(originalIndex)
+        }
+      }
+    }
+  }, [stops, searchParams, onSelectStop])
 
   // Reset state when the drawer opens so nothing is pre-selected and lazy loading restarts
+  // (unless there's a stop param in the URL - that's handled by the URL effect)
   useEffect(() => {
     if (isOpen) {
       setLoadedCount(BATCH_SIZE)
       setSearchQuery('')
-      setSelectedStop(null)
+      // Only clear selected stop if there's no stop in URL
+      if (!searchParams.get('stop')) {
+        setSelectedStop(null)
+      }
     }
-  }, [isOpen])
+  }, [isOpen, searchParams])
 
   // Reverse chronological order (most recent first = highest index first)
   const reversedStops = useMemo(() => {
@@ -117,16 +205,97 @@ export default function FlightLogPanel({
       if (originalIndex !== -1) {
         onSelectStop(originalIndex)
         setSelectedStop(stop)
+        updateUrlWithStop(stop.stop_number)
       }
     },
-    [stops, onSelectStop]
+    [stops, onSelectStop, updateUrlWithStop]
   )
+  
+  // Close detail modal and clear URL param
+  const handleCloseDetail = useCallback(() => {
+    setSelectedStop(null)
+    updateUrlWithStop(null)
+  }, [updateUrlWithStop])
 
-  // Format time for display
+  // Get previous and next stops for navigation
+  const getAdjacentStops = useCallback(() => {
+    if (!selectedStop) return { prev: null, next: null }
+    const currentIdx = stops.findIndex(s => s.stop_number === selectedStop.stop_number)
+    return {
+      prev: currentIdx > 0 ? stops[currentIdx - 1] : null,
+      next: currentIdx < stops.length - 1 ? stops[currentIdx + 1] : null,
+    }
+  }, [selectedStop, stops])
+
+  const { prev: prevStop, next: nextStop } = getAdjacentStops()
+
+  // Navigate to a specific stop
+  const navigateToStop = useCallback((stop: FlightStop) => {
+    const originalIndex = stops.findIndex(s => s.stop_number === stop.stop_number)
+    if (originalIndex !== -1) {
+      onSelectStop(originalIndex)
+      setSelectedStop(stop)
+      updateUrlWithStop(stop.stop_number)
+    }
+  }, [stops, onSelectStop, updateUrlWithStop])
+
+  // Swipe handling for touch devices
+  const touchStartX = useRef<number | null>(null)
+  const touchEndX = useRef<number | null>(null)
+  const minSwipeDistance = 50
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchEndX.current = null
+  }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return
+    
+    const distance = touchStartX.current - touchEndX.current
+    const isSwipeLeft = distance > minSwipeDistance
+    const isSwipeRight = distance < -minSwipeDistance
+
+    if (isSwipeLeft && nextStop) {
+      navigateToStop(nextStop)
+    } else if (isSwipeRight && prevStop) {
+      navigateToStop(prevStop)
+    }
+
+    touchStartX.current = null
+    touchEndX.current = null
+  }, [nextStop, prevStop, navigateToStop])
+
+  // Format time for display (short version for list)
   const formatTime = (utcTime: string) => {
     if (!utcTime) return '--:--'
     const parts = utcTime.split(' ')
     return parts[1] || utcTime
+  }
+
+  // Format datetime for human-readable display (e.g., "December 25, 2024 12:00 AM")
+  const formatDateTime = (dateTimeStr: string) => {
+    if (!dateTimeStr) return 'N/A'
+    try {
+      // Parse "2024-12-25 11:00:00" format
+      const date = new Date(dateTimeStr.replace(' ', 'T'))
+      if (isNaN(date.getTime())) return dateTimeStr
+      
+      return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    } catch {
+      return dateTimeStr
+    }
   }
 
   const formatOffset = (offset?: number) => {
@@ -271,20 +440,6 @@ export default function FlightLogPanel({
                           <div className="text-[10px] text-[#33ff33]/50 uppercase tracking-wider">
                             {stop.country}
                           </div>
-                          {/* Weather info */}
-                          {stop.temperature_c !== undefined && (
-                            <div className="flex items-center gap-2 mt-1.5 text-[10px] text-[#33ff33]/70">
-                              <span>{stop.temperature_c.toFixed(1)}°C</span>
-                              <span className="text-[#33ff33]/40">•</span>
-                              <span className="truncate">{stop.weather_condition}</span>
-                              {stop.wind_speed_mps !== undefined && (
-                                <>
-                                  <span className="text-[#33ff33]/40">•</span>
-                                  <span>💨 {stop.wind_speed_mps.toFixed(1)}m/s</span>
-                                </>
-                              )}
-                            </div>
-                          )}
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-[10px] text-[#33ff33]/60">
@@ -326,13 +481,18 @@ export default function FlightLogPanel({
       </div>
 
       {selectedStop && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[1003] flex items-center justify-center md:px-4 font-mono">
           <div
-            className="absolute inset-0 bg-black/70"
-            onClick={() => setSelectedStop(null)}
+            className="absolute inset-0 bg-black/70 hidden md:block"
+            onClick={handleCloseDetail}
           />
-          <div className="relative w-full max-w-xl bg-black border border-[#33ff33]/50 shadow-2xl shadow-[#33ff33]/20">
-            <div className="flex items-start justify-between px-4 py-3 border-b border-[#33ff33]/30">
+          <div 
+            className="relative w-full h-full md:h-auto md:max-w-xl bg-black md:border border-[#33ff33]/50 md:shadow-2xl md:shadow-[#33ff33]/20 flex flex-col"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#33ff33]/40 bg-[#33ff33]/10">
               <div>
                 <div className="text-xs text-[#33ff33]/60 uppercase tracking-wider">
                   Stop #{selectedStop.stop_number.toString().padStart(5, '0')}
@@ -345,25 +505,26 @@ export default function FlightLogPanel({
                 </div>
               </div>
               <button
-                onClick={() => setSelectedStop(null)}
-                className="text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors w-7 h-7 flex items-center justify-center border border-[#33ff33]/50 text-sm"
+                onClick={handleCloseDetail}
+                className="text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors px-3 py-1.5 flex items-center gap-1.5 border border-[#33ff33]/50 text-xs uppercase tracking-wider"
               >
-                ✕
+                <span>✕</span>
+                <span>Close</span>
               </button>
             </div>
 
-            <div className="p-4 space-y-4 text-[#33ff33]">
+            <div className="p-4 space-y-4 text-[#33ff33] flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">UTC Time</div>
-                  <div className="text-sm">{selectedStop.utc_time || 'N/A'}</div>
                   <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Local Time</div>
-                  <div className="text-sm">{selectedStop.local_time || 'N/A'}</div>
+                  <div className="text-sm">{formatDateTime(selectedStop.local_time)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mt-2">UTC Time</div>
+                  <div className="text-sm">{formatDateTime(selectedStop.utc_time)}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Timezone</div>
                   <div className="text-sm">{selectedStop.timezone || 'N/A'}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">UTC Offset</div>
+                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mt-2">UTC Offset</div>
                   <div className="text-sm">{formatOffset(selectedStop.utc_offset)}</div>
                 </div>
                 <div className="space-y-1">
@@ -376,28 +537,125 @@ export default function FlightLogPanel({
                 </div>
               </div>
 
-              {(selectedStop.temperature_c !== undefined || selectedStop.weather_condition) && (
-                <div className="border border-[#33ff33]/40 p-3 bg-[#33ff33]/5">
-                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mb-1">Weather</div>
-                  <div className="text-sm flex flex-wrap gap-x-3 gap-y-1 items-center">
-                    {selectedStop.temperature_c !== undefined && (
-                      <span>{selectedStop.temperature_c.toFixed(1)}°C</span>
-                    )}
-                    {selectedStop.weather_condition && (
-                      <span className="text-[#33ff33]/80">{selectedStop.weather_condition}</span>
-                    )}
-                    {selectedStop.wind_speed_mps !== undefined && (
-                      <span>Wind {selectedStop.wind_speed_mps.toFixed(1)} m/s</span>
-                    )}
-                    {selectedStop.wind_direction_deg !== undefined && (
-                      <span>↗ {selectedStop.wind_direction_deg.toFixed(0)}°</span>
-                    )}
-                    {selectedStop.wind_gust_mps !== undefined && (
-                      <span>Gusts {selectedStop.wind_gust_mps.toFixed(1)} m/s</span>
+              {/* Weather Section */}
+              <div className="border-t border-[#33ff33]/30 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Weather Conditions</div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-[8px] uppercase tracking-wider text-[#33ff33]/40 leading-none">
+                      Freedom Units<span className="text-[6px] align-super">™</span>
+                    </span>
+                    <Switch
+                      checked={useFreedomUnits}
+                      onChange={handleFreedomUnitsChange}
+                      className={`
+                        relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full 
+                        border border-[#33ff33]/50 transition-colors duration-200 ease-in-out
+                        focus:outline-none focus-visible:ring-1 focus-visible:ring-[#33ff33]
+                        ${useFreedomUnits ? 'bg-[#33ff33]/30' : 'bg-black'}
+                      `}
+                    >
+                      <span
+                        className={`
+                          pointer-events-none inline-block h-4 w-4 transform rounded-full 
+                          shadow-lg ring-0 transition duration-200 ease-in-out mt-px ml-px
+                          ${useFreedomUnits 
+                            ? 'translate-x-[16px] bg-[#33ff33]' 
+                            : 'translate-x-0 bg-[#33ff33]/50'}
+                        `}
+                      />
+                    </Switch>
+                  </label>
+                </div>
+                {(typeof selectedStop.temperature_c === 'number' && !isNaN(selectedStop.temperature_c)) || selectedStop.weather_condition ? (
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Temperature</div>
+                      <div className="text-lg">
+                        {typeof selectedStop.temperature_c === 'number' && !isNaN(selectedStop.temperature_c) 
+                          ? useFreedomUnits
+                            ? `${celsiusToFahrenheit(selectedStop.temperature_c).toFixed(1)}°F`
+                            : `${selectedStop.temperature_c.toFixed(1)}°C`
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Conditions</div>
+                      <div className="text-sm">{selectedStop.weather_condition || 'N/A'}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Speed</div>
+                      <div className="text-sm">
+                        {typeof selectedStop.wind_speed_mps === 'number' && !isNaN(selectedStop.wind_speed_mps)
+                          ? useFreedomUnits
+                            ? `${mpsToMph(selectedStop.wind_speed_mps).toFixed(1)} mph`
+                            : `${selectedStop.wind_speed_mps.toFixed(1)} m/s`
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Direction</div>
+                      <div className="text-sm">
+                        {typeof selectedStop.wind_direction_deg === 'number' && !isNaN(selectedStop.wind_direction_deg)
+                          ? formatWindDirection(selectedStop.wind_direction_deg)
+                          : 'N/A'}
+                      </div>
+                    </div>
+                    {typeof selectedStop.wind_gust_mps === 'number' && !isNaN(selectedStop.wind_gust_mps) && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Gusts</div>
+                        <div className="text-sm">
+                          {useFreedomUnits
+                            ? `${mpsToMph(selectedStop.wind_gust_mps).toFixed(1)} mph`
+                            : `${selectedStop.wind_gust_mps.toFixed(1)} m/s`}
+                        </div>
+                      </div>
                     )}
                   </div>
+                ) : (
+                  <div className="text-sm text-[#33ff33]/40">No weather data available</div>
+                )}
+              </div>
+            </div>
+
+            {/* Navigation Footer */}
+            <div className="flex-shrink-0 border-t border-[#33ff33]/40 bg-[#33ff33]/5 grid grid-cols-2">
+              <button
+                onClick={() => prevStop && navigateToStop(prevStop)}
+                disabled={!prevStop}
+                className={`
+                  flex items-center gap-2 px-4 py-3 text-left border-r border-[#33ff33]/20 transition-colors
+                  ${prevStop 
+                    ? 'text-[#33ff33] hover:bg-[#33ff33]/10 active:bg-[#33ff33]/20' 
+                    : 'text-[#33ff33]/20 cursor-not-allowed'}
+                `}
+              >
+                <span className="text-lg">←</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[8px] uppercase tracking-wider text-[#33ff33]/50">Previous</div>
+                  <div className="text-xs truncate">
+                    {prevStop ? prevStop.city : 'Start'}
+                  </div>
                 </div>
-              )}
+              </button>
+              <button
+                onClick={() => nextStop && navigateToStop(nextStop)}
+                disabled={!nextStop}
+                className={`
+                  flex items-center gap-2 px-4 py-3 text-right transition-colors
+                  ${nextStop 
+                    ? 'text-[#33ff33] hover:bg-[#33ff33]/10 active:bg-[#33ff33]/20' 
+                    : 'text-[#33ff33]/20 cursor-not-allowed'}
+                `}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-[8px] uppercase tracking-wider text-[#33ff33]/50">Next</div>
+                  <div className="text-xs truncate">
+                    {nextStop ? nextStop.city : 'End'}
+                  </div>
+                </div>
+                <span className="text-lg">→</span>
+              </button>
             </div>
           </div>
         </div>

@@ -219,7 +219,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   // Load flight data in background
   useEffect(() => {
     setLoading(true)
-    fetch(dataFile)
+    // Add cache-busting to ensure fresh data
+    fetch(`${dataFile}?t=${Date.now()}`)
       .then(res => res.text())
       .then(csv => {
         const lines = csv.trim().split('\n')

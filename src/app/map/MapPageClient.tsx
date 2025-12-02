@@ -31,10 +31,10 @@ interface MapPageClientProps {
   flightParam: string
 }
 
-// Generate flight title from filename - supports YYYY_santa_tracker format
+// Generate flight title from filename - supports YYYY_santa_tracker_weather format
 function getFlightTitle(filename: string): string {
-  // Check for YYYY_santa_tracker pattern
-  const yearMatch = filename.match(/^(\d{4})_santa_tracker$/)
+  // Check for YYYY_santa_tracker or YYYY_santa_tracker_weather pattern
+  const yearMatch = filename.match(/^(\d{4})_santa_tracker(_weather)?$/)
   if (yearMatch) {
     return `${yearMatch[1]} / SANTA TRACKER`
   }

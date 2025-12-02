@@ -1,13 +1,14 @@
 import MapPageClient from './MapPageClient'
 
 interface MapPageProps {
-  searchParams: {
+  searchParams: Promise<{
     flight?: string
-  }
+  }>
 }
 
-export default function MapPage({ searchParams }: MapPageProps) {
-  const flightParam = searchParams.flight || '2024_santa_tracker'
+export default async function MapPage({ searchParams }: MapPageProps) {
+  const params = await searchParams
+  const flightParam = params.flight || '2024_santa_tracker_weather'
 
   return <MapPageClient flightParam={flightParam} />
 }
