@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { trackCommandClick } from '@/lib/analytics'
 
 const ASCII_TITLE = `
   LIVE
@@ -550,7 +551,11 @@ export default function Home() {
                       >
                         <button
                           type="button"
-                          onClick={() => option.href !== '#' && isActiveOptions && handleCommand(option.key)}
+                          onClick={() => {
+                            if (option.href === '#' || !isActiveOptions) return
+                            trackCommandClick(option.key, option.label)
+                            handleCommand(option.key)
+                          }}
                           className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
                             option.href === '#' || !isActiveOptions
                               ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
