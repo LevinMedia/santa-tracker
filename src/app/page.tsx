@@ -466,12 +466,18 @@ export default function Home() {
     return () => timersRef.current.forEach(t => clearTimeout(t))
   }, [appendOptionsEntry, runBootSequence])
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom only if user is near the bottom
+  const isNearBottom = useCallback(() => {
+    if (!containerRef.current) return true
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current
+    return scrollHeight - scrollTop - clientHeight < 150
+  }, [])
+
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && isNearBottom()) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [entries, typingLine, typedChars, showPrompt, announcementComplete])
+  }, [entries, typingLine, typedChars, showPrompt, announcementComplete, isNearBottom])
 
   // Handle flight log selection from the flight menu
   const handleFlightSelection = useCallback(
@@ -902,7 +908,7 @@ export default function Home() {
                   onCommand={handleCommand}
                   onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
                   onElementAppear={isActiveOptions ? () => {
-                    if (containerRef.current) {
+                    if (containerRef.current && isNearBottom()) {
                       containerRef.current.scrollTop = containerRef.current.scrollHeight
                     }
                   } : undefined}
