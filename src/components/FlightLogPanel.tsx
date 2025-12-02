@@ -169,7 +169,7 @@ export default function FlightLogPanel({
                   setLoadedCount(BATCH_SIZE) // Reset lazy load on search
                 }}
                 placeholder="SEARCH CITY, COUNTRY, OR STOP #..."
-                className="w-full bg-black border border-[#33ff33]/50 text-[#33ff33] text-xs px-3 py-2 pl-8 placeholder-[#33ff33]/30 focus:outline-none focus:border-[#33ff33]"
+                className="w-full bg-black border border-[#33ff33]/50 text-[#33ff33] text-base md:text-xs px-3 py-2 pl-8 placeholder-[#33ff33]/30 focus:outline-none focus:border-[#33ff33]"
               />
               <svg
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#33ff33]/50"
