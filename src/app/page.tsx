@@ -7,7 +7,12 @@ import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
 // Typewriter component for streaming text
-function TypewriterText({ text, isActive, onComplete }: { text: string; isActive: boolean; onComplete?: () => void }) {
+function TypewriterText({
+  text,
+  isActive,
+  onComplete,
+  onProgress,
+}: { text: string; isActive: boolean; onComplete?: () => void; onProgress?: () => void }) {
   const [displayedChars, setDisplayedChars] = useState(isActive ? 0 : text.length)
   const hasCompletedRef = useRef(!isActive)
   
@@ -26,6 +31,7 @@ function TypewriterText({ text, isActive, onComplete }: { text: string; isActive
       const interval = setInterval(() => {
         currentChar++
         setDisplayedChars(currentChar)
+        onProgress?.()
         
         if (currentChar >= text.length) {
           clearInterval(interval)
@@ -36,20 +42,20 @@ function TypewriterText({ text, isActive, onComplete }: { text: string; isActive
       
       return () => clearInterval(interval)
     }
-  }, [isActive, text, displayedChars, onComplete])
+  }, [isActive, text, displayedChars, onComplete, onProgress])
   
   return <>{text.slice(0, displayedChars)}</>
 }
 
 // Options entry component with typewriter effect
-function OptionsEntry({ 
-  entryId, 
-  isActive, 
-  isProcessing, 
+function OptionsEntry({
+  entryId,
+  isActive,
+  isProcessing,
   onCommand,
   onAnnouncementComplete,
   onElementAppear
-}: { 
+}: {
   entryId: string
   isActive: boolean
   isProcessing: boolean
@@ -100,10 +106,11 @@ function OptionsEntry({
   return (
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
       <p className="mb-4">
-        <TypewriterText 
-          text={ANNOUNCEMENT_TEXT} 
-          isActive={isActive} 
+        <TypewriterText
+          text={ANNOUNCEMENT_TEXT}
+          isActive={isActive}
           onComplete={handleTypewriterComplete}
+          onProgress={isActive ? onElementAppear : undefined}
         />
       </p>
       {showCTA && (
@@ -250,6 +257,7 @@ export default function Home() {
   const [isShutdown, setIsShutdown] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
+  const initialScrollDoneRef = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
 
   // Calculate countdown to next Christmas
@@ -493,6 +501,14 @@ export default function Home() {
       containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
   }, [])
+
+  // Ensure the viewport starts at the bottom after restoring history or returning from the map view
+  useEffect(() => {
+    if (!initialScrollDoneRef.current && entries.length > 0) {
+      scrollToBottom()
+      initialScrollDoneRef.current = true
+    }
+  }, [entries.length, scrollToBottom])
 
   useEffect(() => {
     if (containerRef.current && isNearBottom()) {
