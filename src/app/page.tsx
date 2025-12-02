@@ -83,7 +83,7 @@ const MENU_ITEMS: MenuItem[] = [
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
   { key: '1', label: 'VIEW PREVIOUS FLIGHTS', href: '/map', delay: 5400 },
-  { key: '2', label: 'SYSTEM DIAGNOSTICS', href: '#', delay: 5600 },
+  { key: '2', label: 'SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
 
