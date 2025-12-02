@@ -47,20 +47,54 @@ function OptionsEntry({
   isActive, 
   isProcessing, 
   onCommand,
-  onAnnouncementComplete
+  onAnnouncementComplete,
+  onElementAppear
 }: { 
   entryId: string
   isActive: boolean
   isProcessing: boolean
   onCommand: (key: string) => void
   onAnnouncementComplete?: () => void
+  onElementAppear?: () => void
 }) {
-  const [showButtons, setShowButtons] = useState(!isActive)
+  const [typewriterDone, setTypewriterDone] = useState(!isActive)
+  const [showCTA, setShowCTA] = useState(!isActive)
+  const [visibleButtons, setVisibleButtons] = useState(!isActive ? COMMAND_OPTIONS.length : 0)
   
   const handleTypewriterComplete = useCallback(() => {
-    setShowButtons(true)
-    onAnnouncementComplete?.()
-  }, [onAnnouncementComplete])
+    setTypewriterDone(true)
+  }, [])
+  
+  // Stream in CTA and buttons sequentially after typewriter completes
+  useEffect(() => {
+    if (!typewriterDone || !isActive) return
+    
+    // Show CTA first
+    const ctaTimer = setTimeout(() => {
+      setShowCTA(true)
+      onElementAppear?.()
+    }, 150)
+    
+    return () => clearTimeout(ctaTimer)
+  }, [typewriterDone, isActive, onElementAppear])
+  
+  // Stream in buttons one by one after CTA appears
+  useEffect(() => {
+    if (!showCTA || !isActive || visibleButtons >= COMMAND_OPTIONS.length) return
+    
+    const buttonTimer = setTimeout(() => {
+      setVisibleButtons(prev => {
+        const next = prev + 1
+        onElementAppear?.()
+        if (next >= COMMAND_OPTIONS.length) {
+          onAnnouncementComplete?.()
+        }
+        return next
+      })
+    }, 120)
+    
+    return () => clearTimeout(buttonTimer)
+  }, [showCTA, isActive, visibleButtons, onElementAppear, onAnnouncementComplete])
   
   return (
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
@@ -71,15 +105,14 @@ function OptionsEntry({
           onComplete={handleTypewriterComplete}
         />
       </p>
-      {showButtons && (
+      {showCTA && (
         <>
           <div>Click, tap or enter command to continue:</div>
           <div className="mt-3 flex flex-col gap-2">
-            {COMMAND_OPTIONS.map((option, index) => (
+            {COMMAND_OPTIONS.slice(0, visibleButtons).map((option) => (
               <div
                 key={`${entryId}-${option.key}`}
                 className="min-h-[1.5em]"
-                style={{ animationDelay: `${index * 0.2}s` }}
               >
                 <button
                   type="button"
@@ -868,6 +901,11 @@ export default function Home() {
                   isProcessing={isProcessing}
                   onCommand={handleCommand}
                   onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
+                  onElementAppear={isActiveOptions ? () => {
+                    if (containerRef.current) {
+                      containerRef.current.scrollTop = containerRef.current.scrollHeight
+                    }
+                  } : undefined}
                 />
               )
             }
