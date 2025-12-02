@@ -246,6 +246,7 @@ export default function Home() {
   const [flightLogs, setFlightLogs] = useState<FlightLog[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [announcementComplete, setAnnouncementComplete] = useState(false)
+  const [isShutdown, setIsShutdown] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
@@ -589,6 +590,38 @@ export default function Home() {
         return
       }
 
+      // HELP command - shows options menu
+      if (normalized === 'HELP') {
+        if (isShutdown) {
+          appendEntry({
+            id: `help-${Date.now()}`,
+            kind: 'text',
+            text: '> COMMAND [HELP]',
+          })
+          await sleep(200)
+          appendEntry({
+            id: `help-info-${Date.now()}`,
+            kind: 'text',
+            text: 'Refresh your browser to restart the application.',
+          })
+          setShowPrompt(true)
+          return
+        }
+        appendEntry({
+          id: `help-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [HELP]',
+        })
+        await sleep(200)
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+        appendOptionsEntry()
+        setShowPrompt(true)
+        return
+      }
+
       if (normalized === '1' || normalized === 'P') {
         setIsProcessing(true)
         setShowPrompt(false)
@@ -747,6 +780,7 @@ export default function Home() {
         setEntries([])
         setUserInput('')
         setActiveOptionsId(null)
+        setIsShutdown(true)
 
         await sleep(200)
 
@@ -754,7 +788,7 @@ export default function Home() {
           {
             id: `shutdown-message-${Date.now()}`,
             kind: 'text',
-            text: 'Refresh your browser to to restart the application.',
+            text: 'Refresh your browser to restart the application.',
           },
         ])
 
@@ -776,23 +810,33 @@ export default function Home() {
         appendEntry({
           id: `unknown-${Date.now()}`,
           kind: 'text',
-          text: `ERROR: UNKNOWN COMMAND "${trimmed}"`,
-          className: 'mb-10'
+          text: `UNKNOWN COMMAND "${trimmed}"`,
         })
 
-        appendEntry({
-          id: `divider-${Date.now()}`,
-          kind: 'hr',
-        })
+        if (isShutdown) {
+          // In shutdown mode, just show help hint
+          appendEntry({
+            id: `help-hint-${Date.now()}`,
+            kind: 'text',
+            text: 'Type HELP for a list of options.',
+            className: 'mb-10'
+          })
+        } else {
+          // Normal mode, show full menu
+          appendEntry({
+            id: `divider-${Date.now()}`,
+            kind: 'hr',
+          })
 
-        await sleep(300)
-        appendOptionsEntry()
+          await sleep(300)
+          appendOptionsEntry()
+        }
         setShowPrompt(true)
       }
 
       setIsProcessing(false)
     },
-    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, router, showPrompt, sleep, updateEntry],
+    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, isShutdown, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
