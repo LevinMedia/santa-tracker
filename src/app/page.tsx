@@ -842,13 +842,19 @@ export default function Home() {
   // Keyboard input handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't interfere with browser shortcuts (Cmd+R, Ctrl+R, etc.)
+      if (e.metaKey || e.ctrlKey) return
+      
       if (!showPrompt) return
 
       if (e.key === 'Enter') {
+        e.preventDefault()
         handleCommand(userInput)
       } else if (e.key === 'Backspace') {
+        e.preventDefault()
         setUserInput(prev => prev.slice(0, -1))
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      } else if (e.key.length === 1) {
+        e.preventDefault()
         setUserInput(prev => prev + e.key.toUpperCase())
       }
     }
