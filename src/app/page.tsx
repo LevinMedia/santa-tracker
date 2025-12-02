@@ -298,6 +298,12 @@ export default function Home() {
         persistEntries(next)
         return next
       })
+      // Always scroll to bottom when actively adding entries
+      setTimeout(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight
+        }
+      }, 10)
     },
     [persistEntries],
   )
@@ -330,6 +336,12 @@ export default function Home() {
         persistEntries(next)
         return next
       })
+      // Scroll during loading animation updates
+      setTimeout(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight
+        }
+      }, 10)
     },
     [persistEntries],
   )
@@ -466,11 +478,18 @@ export default function Home() {
     return () => timersRef.current.forEach(t => clearTimeout(t))
   }, [appendOptionsEntry, runBootSequence])
 
-  // Auto-scroll to bottom only if user is near the bottom
+  // Auto-scroll to bottom only if user is near the bottom (for passive updates)
   const isNearBottom = useCallback(() => {
     if (!containerRef.current) return true
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current
     return scrollHeight - scrollTop - clientHeight < 150
+  }, [])
+
+  // Force scroll to bottom (for active command streaming)
+  const scrollToBottom = useCallback(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
   }, [])
 
   useEffect(() => {
@@ -907,11 +926,7 @@ export default function Home() {
                   isProcessing={isProcessing}
                   onCommand={handleCommand}
                   onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
-                  onElementAppear={isActiveOptions ? () => {
-                    if (containerRef.current && isNearBottom()) {
-                      containerRef.current.scrollTop = containerRef.current.scrollHeight
-                    }
-                  } : undefined}
+                  onElementAppear={isActiveOptions ? scrollToBottom : undefined}
                 />
               )
             }
