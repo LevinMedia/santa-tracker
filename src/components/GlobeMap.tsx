@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, startTransition } from 'react'
 import FlightLogPanel from './FlightLogPanel'
 
 interface FlightStop {
@@ -369,19 +369,25 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   useEffect(() => {
     if (!isPlaying || loading || stops.length === 0) return
     
-    playStartTime.current = Date.now()
-    playStartIndex.current = currentIndex
-    playStartSimTime.current = stops[currentIndex].timestamp
+    // Capture values at effect start time
+    const startTime = Date.now()
+    const startIndex = currentIndex
+    const startSimTime = stops[currentIndex]?.timestamp ?? 0
+    
+    // Store in refs for the animation loop
+    playStartTime.current = startTime
+    playStartIndex.current = startIndex
+    playStartSimTime.current = startSimTime
+    
+    let lastUpdateIndex = startIndex
     
     const animate = () => {
       const elapsed = Date.now() - playStartTime.current
       const scaledElapsed = elapsed * playSpeed
       const targetMissionTime = playStartSimTime.current + scaledElapsed
       
-      setDisplayTime(formatUTCTime(targetMissionTime))
-      setCurrentSimTime(targetMissionTime)
-      
-      let newIndex = currentIndex
+      // Find current index based on time
+      let newIndex = lastUpdateIndex
       for (let i = playStartIndex.current; i < stops.length; i++) {
         if (stops[i].timestamp <= targetMissionTime) {
           newIndex = i
@@ -390,22 +396,30 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         }
       }
       
-      if (newIndex !== currentIndex) {
-        setCurrentIndex(newIndex)
-      }
-      
       // Calculate travel progress
+      let progress = 0
       if (newIndex < stops.length - 1) {
         const currentStopTs = stops[newIndex].timestamp
         const nextStopTs = stops[newIndex + 1].timestamp
         const legDuration = nextStopTs - currentStopTs
         const timeIntoLeg = targetMissionTime - currentStopTs
-        const progress = Math.max(0, Math.min(1, timeIntoLeg / legDuration))
-        setTravelProgress(progress)
-      } else {
-        setTravelProgress(0)
+        progress = Math.max(0, Math.min(1, timeIntoLeg / legDuration))
       }
       
+      // Batch state updates using startTransition to prevent blocking
+      startTransition(() => {
+        setDisplayTime(formatUTCTime(targetMissionTime))
+        setCurrentSimTime(targetMissionTime)
+        setTravelProgress(progress)
+        
+        // Only update index if it actually changed
+        if (newIndex !== lastUpdateIndex) {
+          lastUpdateIndex = newIndex
+          setCurrentIndex(newIndex)
+        }
+      })
+      
+      // Stop at end
       if (newIndex >= stops.length - 1) {
         setIsPlaying(false)
         return
@@ -421,6 +435,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         cancelAnimationFrame(animationFrame.current)
       }
     }
+  // Note: currentIndex is intentionally NOT in deps - we capture it at effect start
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, loading, stops, playSpeed, formatUTCTime])
 
   // Update animation when speed changes
@@ -671,6 +687,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   // Prepare arc data for travel animation (3D arcs through space)
   const nextStop = currentIndex < stops.length - 1 ? stops[currentIndex + 1] : null
   const prevStop = currentIndex > 0 ? stops[currentIndex - 1] : null
+  const prevStop2 = currentIndex > 1 ? stops[currentIndex - 2] : null
+  const prevStop3 = currentIndex > 2 ? stops[currentIndex - 3] : null
   
   // Calculate arc altitude based on distance
   const calcArcAltitude = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
@@ -720,21 +738,48 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
       })
     }
     
-    // Previous arc (fading out)
-    if (isAnimating && currentStop && prevStop && activeProgress > 0 && activeProgress < 1) {
+    // Fading arcs trail - 3 previous arcs with stable opacities (no flickering)
+    // Arc 1: Most recent
+    if (isAnimating && currentStop && prevStop) {
       arcs.push({
         startLat: currentStop.lat,
         startLng: currentStop.lng,
         endLat: prevStop.lat,
         endLng: prevStop.lng,
-        opacity: 1 - activeProgress,
+        opacity: 0.5,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
       })
     }
     
+    // Arc 2: Second most recent
+    if (isAnimating && prevStop && prevStop2) {
+      arcs.push({
+        startLat: prevStop.lat,
+        startLng: prevStop.lng,
+        endLat: prevStop2.lat,
+        endLng: prevStop2.lng,
+        opacity: 0.3,
+        dashLength: 1,
+        altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
+      })
+    }
+    
+    // Arc 3: Third most recent
+    if (isAnimating && prevStop2 && prevStop3) {
+      arcs.push({
+        startLat: prevStop2.lat,
+        startLng: prevStop2.lng,
+        endLat: prevStop3.lat,
+        endLng: prevStop3.lng,
+        opacity: 0.15,
+        dashLength: 1,
+        altitude: calcArcAltitude(prevStop3.lat, prevStop3.lng, prevStop2.lat, prevStop2.lng),
+      })
+    }
+    
     return arcs
-  }, [isPlaying, currentStop, nextStop, prevStop, travelProgress, calcArcAltitude, isLive, isFollowingLive])
+  }, [isPlaying, currentStop, nextStop, prevStop, prevStop2, prevStop3, travelProgress, calcArcAltitude, isLive, isFollowingLive])
 
   return (
     <div className="relative w-full h-full bg-black">
@@ -796,7 +841,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
             arcEndLat="endLat"
             arcEndLng="endLng"
             arcColor={(d: any) => `rgba(51, 255, 51, ${d.opacity})`}
-            arcStroke={Math.max(0.3, Math.min(1.5, 1.5 * (cameraAltitude / 2)))}
+            arcStroke={Math.max(0.15, Math.min(0.6, 0.6 * (cameraAltitude / 2)))}
             arcAltitude={(d: any) => d.altitude}
             arcDashLength={(d: any) => d.dashLength}
             arcDashGap={2}
