@@ -54,7 +54,8 @@ function OptionsEntry({
   isProcessing,
   onCommand,
   onAnnouncementComplete,
-  onElementAppear
+  onElementAppear,
+  isSantaLive = false
 }: {
   entryId: string
   isActive: boolean
@@ -62,6 +63,7 @@ function OptionsEntry({
   onCommand: (key: string) => void
   onAnnouncementComplete?: () => void
   onElementAppear?: () => void
+  isSantaLive?: boolean
 }) {
   const [typewriterDone, setTypewriterDone] = useState(!isActive)
   const [showCTA, setShowCTA] = useState(!isActive)
@@ -117,6 +119,31 @@ function OptionsEntry({
         <>
           <div>Click, tap or enter command to continue:</div>
           <div className="mt-3 flex flex-col gap-2">
+            {/* LIVE NOW button - shown first when Santa is live */}
+            {isSantaLive && (
+              <div className="min-h-[1.5em]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isActive) return
+                    trackCommandClick('L', 'LIVE NOW - TRACK SANTA')
+                    onCommand('L')
+                  }}
+                  className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 ${
+                    !isActive
+                      ? 'bg-red-900/50 text-red-300 border border-dashed border-red-500/50 opacity-50 cursor-not-allowed'
+                      : 'bg-red-600 text-white border border-red-500 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] cursor-pointer animate-pulse'
+                  }`}
+                  disabled={isProcessing || !isActive}
+                >
+                  <span className="font-bold underline">L</span>
+                  <span className="ml-3 leading-none flex items-center gap-2">
+                    <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                    LIVE NOW - TRACK SANTA
+                  </span>
+                </button>
+              </div>
+            )}
             {COMMAND_OPTIONS.slice(0, visibleButtons).map((option) => (
               <div
                 key={`${entryId}-${option.key}`}
@@ -225,7 +252,7 @@ const MENU_ITEMS: MenuItem[] = [
   { text: '    BYPASSING SECURITY PROTOCOLS', delay: 3900, isSecurityBypass: true },
   { text: '', delay: 7200 },
   { text: '    DETECTING NORTH POLE MAGIC LEVELS..... NOMINAL', delay: 7400 },
-  { text: '    SYSTEM STATUS........ STANDBY', delay: 7600 },
+  { text: '    SYSTEM STATUS........ STANDBY ', delay: 7600 },
   { type: 'countdown', delay: 7800 },
   { text: '', delay: 8000 },
   { type: 'hr', delay: 8100 },
@@ -239,6 +266,12 @@ const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
+
+// Live flight configuration
+const LIVE_FLIGHT_FILE = '2025_santa_tracker'
+// Flight window: Dec 2, 10:00 UTC to Dec 4, 12:00 UTC (for testing - would be Dec 24-26 in production)
+const LIVE_FLIGHT_START_UTC = new Date('2025-12-02T10:00:00Z').getTime()
+const LIVE_FLIGHT_END_UTC = new Date('2025-12-04T12:00:00Z').getTime()
 
 export default function Home() {
   const router = useRouter()
@@ -256,6 +289,7 @@ export default function Home() {
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [announcementComplete, setAnnouncementComplete] = useState(false)
   const [isShutdown, setIsShutdown] = useState(false)
+  const [isSantaLive, setIsSantaLive] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const initialScrollDoneRef = useRef(false)
@@ -296,6 +330,19 @@ export default function Home() {
     const interval = setInterval(updateCountdown, 1000)
     return () => clearInterval(interval)
   }, [getNextChristmas])
+
+  // Check if Santa is currently live (within flight window)
+  useEffect(() => {
+    const checkLiveStatus = () => {
+      const now = Date.now()
+      const isLive = now >= LIVE_FLIGHT_START_UTC && now <= LIVE_FLIGHT_END_UTC
+      setIsSantaLive(isLive)
+    }
+    
+    checkLiveStatus()
+    const interval = setInterval(checkLiveStatus, 10000) // Check every 10 seconds
+    return () => clearInterval(interval)
+  }, [])
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -666,6 +713,54 @@ export default function Home() {
         return
       }
 
+      // LIVE tracking command
+      if (normalized === 'L' && isSantaLive) {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+        
+        appendEntry({
+          id: `cmd-l-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [L] LIVE NOW - TRACK SANTA',
+        })
+        
+        await sleep(200)
+        
+        const frames = ['/', '—', '\\', '|']
+        const loadingId = `loading-live-${Date.now()}`
+        appendEntry({
+          id: loadingId,
+          kind: 'text',
+          text: 'CONNECTING TO LIVE SANTA FEED / ...',
+        })
+        
+        for (let i = 0; i < 15; i++) {
+          updateEntry(loadingId, `CONNECTING TO LIVE SANTA FEED ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+          await sleep(100)
+        }
+        
+        appendEntry({
+          id: `live-ready-${Date.now()}`,
+          kind: 'text',
+          text: 'LIVE FEED ESTABLISHED. LAUNCHING TRACKER...',
+          className: 'mb-10'
+        })
+        
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+        
+        await sleep(300)
+        router.push(`/map?flight=${LIVE_FLIGHT_FILE}&mode=live`)
+        
+        appendOptionsEntry()
+        setShowPrompt(true)
+        setIsProcessing(false)
+        return
+      }
+
       if (normalized === '1' || normalized === 'P') {
         setIsProcessing(true)
         setShowPrompt(false)
@@ -880,7 +975,7 @@ export default function Home() {
 
       setIsProcessing(false)
     },
-    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, isShutdown, router, showPrompt, sleep, updateEntry],
+    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, isSantaLive, isShutdown, router, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
@@ -1023,6 +1118,7 @@ export default function Home() {
                   onCommand={handleCommand}
                   onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
                   onElementAppear={isActiveOptions ? scrollToBottom : undefined}
+                  isSantaLive={isSantaLive}
                 />
               )
             }

@@ -26,6 +26,7 @@ interface FlightStop {
 
 interface GlobeMapProps {
   dataFile?: string
+  mode?: 'replay' | 'live'
 }
 
 // Parse CSV line handling quoted fields with commas
@@ -50,12 +51,14 @@ function parseCSVLine(line: string): string[] {
 }
 
 // Parse UTC time string to timestamp
-function parseUTCTime(timeStr: string): number {
+// In replay mode, we force the year to current year so timestamps work for playback
+// In live mode, we use the actual year from the data
+function parseUTCTime(timeStr: string, useRealYear: boolean = false): number {
   const date = new Date(timeStr.replace(' ', 'T') + 'Z')
 
-  // Force 2024 to align with last year's replay data
-  if (!isNaN(date.getTime())) {
-    date.setUTCFullYear(2024)
+  if (!isNaN(date.getTime()) && !useRealYear) {
+    // Force current year to align replay data with current time calculations
+    date.setUTCFullYear(new Date().getFullYear())
   }
 
   return date.getTime()
@@ -131,7 +134,7 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
-export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' }: GlobeMapProps) {
+export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv', mode = 'replay' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -149,6 +152,12 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
+  
+  // Live mode state
+  const [liveIndex, setLiveIndex] = useState(0)
+  const [liveTravelProgress, setLiveTravelProgress] = useState(0)
+  const [isFollowingLive, setIsFollowingLive] = useState(mode === 'live')
+  const isLive = mode === 'live'
   
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
@@ -249,7 +258,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
             lng,
             utc_time,
             local_time: values[9] || '',
-            timestamp: parseUTCTime(utc_time),
+            timestamp: parseUTCTime(utc_time, isLive), // Use real year for live mode
             timezone: values[5] || undefined,
             utc_offset: values[6] ? parseFloat(values[6]) : undefined,
             utc_offset_rounded: values[7] ? parseFloat(values[7]) : undefined,
@@ -263,21 +272,98 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
         }
         
         setStops(data)
-        setCurrentIndex(Math.max(0, data.length - 1)) // Start at end for replay state
+        
+        if (isLive) {
+          // Live mode: start at beginning, will calculate live position
+          setCurrentIndex(0)
+        } else {
+          // Replay mode: start at end
+          setCurrentIndex(Math.max(0, data.length - 1))
+        }
+        
         setLoading(false)
-        console.log(`Loaded ${data.length} flight stops from ${dataFile}`)
+        console.log(`Loaded ${data.length} flight stops from ${dataFile} (mode: ${mode})`)
       })
       .catch(err => {
         console.error('Error loading flight data:', err)
         setLoading(false)
       })
-  }, [dataFile])
+  }, [dataFile, isLive, mode])
 
   // Format timestamp to UTC string
   const formatUTCTime = useCallback((timestamp: number): string => {
     const date = new Date(timestamp)
     return date.toISOString().replace('T', ' ').slice(0, 19)
   }, [])
+
+  // Live mode: Calculate current position based on real UTC time
+  useEffect(() => {
+    if (!isLive || loading || stops.length === 0) return
+    
+    const calculateLivePosition = () => {
+      const now = Date.now()
+      
+      // Find the last stop that has already happened
+      let newLiveIndex = -1
+      for (let i = 0; i < stops.length; i++) {
+        if (stops[i].timestamp <= now) {
+          newLiveIndex = i
+        } else {
+          break
+        }
+      }
+      
+      // If flight hasn't started yet, stay at index 0
+      if (newLiveIndex < 0) {
+        newLiveIndex = 0
+        setLiveIndex(0)
+        setLiveTravelProgress(0)
+        if (isFollowingLive) {
+          setCurrentIndex(0)
+          setTravelProgress(0)
+          setCurrentSimTime(stops[0].timestamp)
+          setDisplayTime(stops[0].utc_time)
+        }
+        return
+      }
+      
+      setLiveIndex(newLiveIndex)
+      
+      // Calculate travel progress toward next stop
+      if (newLiveIndex < stops.length - 1) {
+        const currentStopTs = stops[newLiveIndex].timestamp
+        const nextStopTs = stops[newLiveIndex + 1].timestamp
+        const legDuration = nextStopTs - currentStopTs
+        const timeIntoLeg = now - currentStopTs
+        const progress = Math.max(0, Math.min(1, timeIntoLeg / legDuration))
+        setLiveTravelProgress(progress)
+        
+        if (isFollowingLive) {
+          setCurrentIndex(newLiveIndex)
+          setTravelProgress(progress)
+          setCurrentSimTime(now)
+          setDisplayTime(formatUTCTime(now))
+        }
+      } else {
+        // At the end
+        setLiveTravelProgress(0)
+        if (isFollowingLive) {
+          setCurrentIndex(newLiveIndex)
+          setTravelProgress(0)
+          setCurrentSimTime(now)
+          setDisplayTime(formatUTCTime(now))
+        }
+      }
+    }
+    
+    // Calculate immediately on load
+    calculateLivePosition()
+    
+    // Update every 100ms for smooth animation
+    const interval = setInterval(calculateLivePosition, 100)
+    
+    return () => clearInterval(interval)
+  }, [isLive, loading, stops, isFollowingLive, formatUTCTime])
 
   // Real-time playback
   useEffect(() => {
@@ -366,13 +452,17 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
     let targetLat: number
     let targetLng: number
     
-    if (isPlaying && nextStop && travelProgress > 0) {
+    // Determine if we should show animation (playing in replay, or following live)
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const activeProgress = isLive ? (isFollowingLive ? travelProgress : 0) : travelProgress
+    
+    if (isAnimating && nextStop && activeProgress > 0) {
       // Follow the tip of the animated edge
-      const interpolated = interpolateGreatCircle(currentStop, nextStop, travelProgress)
+      const interpolated = interpolateGreatCircle(currentStop, nextStop, activeProgress)
       targetLat = interpolated.lat
       targetLng = interpolated.lng
     } else {
-      // When paused, center on current stop
+      // When paused/not following, center on current stop
       targetLat = currentStop.lat
       targetLng = currentStop.lng
     }
@@ -381,9 +471,9 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
     const currentPov = globeRef.current.pointOfView()
     globeRef.current.pointOfView(
       { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? defaultCameraAltitude },
-      isPlaying ? 0 : 300  // No animation during playback to avoid zoom fighting
+      isAnimating ? 0 : 300  // No animation during playback/live to avoid zoom fighting
     )
-  }, [currentIndex, stops, globeReady, isPlaying, travelProgress])
+  }, [currentIndex, stops, globeReady, isPlaying, travelProgress, isLive, isFollowingLive])
 
   // Track altitude changes from user zooming
   const lastAltitudeRef = useRef(cameraAltitude)
@@ -451,17 +541,43 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value)
-    setCurrentIndex(newIndex)
-    if (isPlaying && stops.length > 0) {
-      playStartTime.current = Date.now()
-      playStartIndex.current = newIndex
-      playStartSimTime.current = stops[newIndex].timestamp
+    
+    if (isLive) {
+      // In live mode, can't scrub past liveIndex
+      const clampedIndex = Math.min(newIndex, liveIndex)
+      setCurrentIndex(clampedIndex)
+      
+      // If scrubbing away from live position, stop following
+      if (clampedIndex < liveIndex) {
+        setIsFollowingLive(false)
+        setTravelProgress(0)
+        if (stops[clampedIndex]) {
+          setCurrentSimTime(stops[clampedIndex].timestamp)
+          setDisplayTime(stops[clampedIndex].utc_time)
+        }
+      }
+    } else {
+      setCurrentIndex(newIndex)
+      if (isPlaying && stops.length > 0) {
+        playStartTime.current = Date.now()
+        playStartIndex.current = newIndex
+        playStartSimTime.current = stops[newIndex].timestamp
+      }
     }
-  }, [isPlaying, stops])
+  }, [isPlaying, stops, isLive, liveIndex])
 
+  // For live mode: determine if we're at the live edge
+  const isAtLiveEdge = isLive && currentIndex === liveIndex && isFollowingLive
+  
   const isAtEnd = stops.length > 0 && currentIndex >= stops.length - 1
 
   const togglePlay = useCallback(() => {
+    if (isLive) {
+      // In live mode, play button doesn't apply at live edge
+      // If viewing history, could implement "catch up" animation, but for now just jump to live
+      return
+    }
+    
     if (isAtEnd) {
       // Reset for replay - wipe all points
       setCurrentIndex(0)
@@ -471,7 +587,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
       return
     }
     setIsPlaying(prev => !prev)
-  }, [formatUTCTime, isAtEnd, missionStart])
+  }, [formatUTCTime, isAtEnd, missionStart, isLive])
+  
+  // Jump to live position
+  const jumpToLive = useCallback(() => {
+    if (!isLive) return
+    setIsFollowingLive(true)
+    setCurrentIndex(liveIndex)
+    setTravelProgress(liveTravelProgress)
+  }, [isLive, liveIndex, liveTravelProgress])
 
   // Handle selecting a stop from the flight log
   const handleSelectStop = useCallback((index: number) => {
@@ -497,7 +621,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   }, [speedMenuOpen])
 
   const currentStop = stops[currentIndex]
-  const progress = stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0
+  // In live mode, progress is relative to liveIndex (available stops), not total stops
+  const progress = isLive 
+    ? (liveIndex > 0 ? ((currentIndex + 1) / (liveIndex + 1)) * 100 : 0)
+    : (stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0)
 
   const elapsedMs = missionStart > 0 && currentSimTime
     ? Math.max(0, currentSimTime - missionStart)
@@ -576,34 +703,38 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
       altitude: number
     }> = []
     
+    // Determine if we should show animated arcs
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const activeProgress = travelProgress
+    
     // Current arc (animating in) - swap start/end so dash draws from current toward next
-    if (isPlaying && currentStop && nextStop && travelProgress > 0) {
+    if (isAnimating && currentStop && nextStop && activeProgress > 0) {
       arcs.push({
         startLat: nextStop.lat,
         startLng: nextStop.lng,
         endLat: currentStop.lat,
         endLng: currentStop.lng,
         opacity: 1,
-        dashLength: travelProgress,
+        dashLength: activeProgress,
         altitude: calcArcAltitude(currentStop.lat, currentStop.lng, nextStop.lat, nextStop.lng),
       })
     }
     
     // Previous arc (fading out)
-    if (isPlaying && currentStop && prevStop && travelProgress > 0 && travelProgress < 1) {
+    if (isAnimating && currentStop && prevStop && activeProgress > 0 && activeProgress < 1) {
       arcs.push({
         startLat: currentStop.lat,
         startLng: currentStop.lng,
         endLat: prevStop.lat,
         endLng: prevStop.lng,
-        opacity: 1 - travelProgress,
+        opacity: 1 - activeProgress,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
       })
     }
     
     return arcs
-  }, [isPlaying, currentStop, nextStop, prevStop, travelProgress, calcArcAltitude])
+  }, [isPlaying, currentStop, nextStop, prevStop, travelProgress, calcArcAltitude, isLive, isFollowingLive])
 
   return (
     <div className="relative w-full h-full bg-black">
@@ -701,10 +832,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
 
         <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
           <div className="flex items-center gap-2">
+            {isLive && isAtLiveEdge && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] uppercase tracking-wider animate-pulse">
+                <span className="w-2 h-2 bg-white rounded-full animate-ping" style={{ animationDuration: '1.5s' }} />
+                LIVE
+              </span>
+            )}
+            {isLive && !isFollowingLive && (
+              <span className="px-2 py-0.5 bg-[#33ff33]/20 text-[#33ff33] text-[10px] uppercase tracking-wider">
+                VIEWING HISTORY
+              </span>
+            )}
             <span className="text-[#33ff33]/50">STOP:</span>
             <span>{(currentIndex + 1).toLocaleString()}</span>
             <span className="text-[#33ff33]/50">/</span>
-            <span>{stops.length.toLocaleString()}</span>
+            <span>{isLive ? (liveIndex + 1).toLocaleString() : stops.length.toLocaleString()}</span>
           </div>
           {displayTime && (
             <div className="flex items-center gap-2">
@@ -717,12 +859,28 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
         <div className="border-t border-[#33ff33]/30" />
         
         <div className="py-2 flex items-center gap-4">
-          <button
-            onClick={togglePlay}
-            className="px-3 py-1 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs border border-[#33ff33]/50"
-          >
-            {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'REPLAY' : '[ ▶ ]'}
-          </button>
+          {/* Play/Pause button - hidden in live mode when at live edge */}
+          {isLive ? (
+            !isFollowingLive ? (
+              <button
+                onClick={jumpToLive}
+                className="px-3 py-1 text-black bg-red-600 hover:bg-red-500 transition-colors text-xs border border-red-600 animate-pulse"
+              >
+                GO LIVE ⚡
+              </button>
+            ) : (
+              <div className="px-3 py-1 text-[#33ff33]/50 text-xs border border-[#33ff33]/30">
+                TRACKING
+              </div>
+            )
+          ) : (
+            <button
+              onClick={togglePlay}
+              className="px-3 py-1 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs border border-[#33ff33]/50"
+            >
+              {isPlaying ? '[ ▌▌ ]' : isAtEnd ? 'REPLAY' : '[ ▶ ]'}
+            </button>
+          )}
           
           <div className="flex-1 relative h-4 flex items-center">
             <div className="absolute inset-x-0 h-1 bg-[#33ff33]/20" />
@@ -741,7 +899,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
             <input
               type="range"
               min="0"
-              max={Math.max(0, stops.length - 1)}
+              max={isLive ? Math.max(0, liveIndex) : Math.max(0, stops.length - 1)}
               value={currentIndex}
               onChange={handleScrub}
               className="relative w-full h-4 appearance-none bg-transparent cursor-pointer z-10
@@ -759,50 +917,53 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
             />
           </div>
           
-          <div className="flex items-center gap-2" ref={speedMenuRef}>
-            <span className="text-[#33ff33]/50 text-xs">SPD:</span>
-            <div className="relative">
-              <button
-                onClick={() => setSpeedMenuOpen(!speedMenuOpen)}
-                className="bg-black border border-[#33ff33]/50 text-[#33ff33] text-xs px-3 py-1 cursor-pointer hover:bg-[#33ff33]/10 focus:outline-none focus:border-[#33ff33] flex items-center gap-3"
-                style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
-              >
-                <span>{SPEED_OPTIONS.find(o => o.value === playSpeed)?.label || 'MAX'}</span>
-                <svg 
-                  className={`w-3 h-3 text-[#33ff33]/60 transition-transform ${speedMenuOpen ? 'rotate-180' : ''}`} 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              
-              {speedMenuOpen && (
-                <div 
-                  className="absolute bottom-full left-0 mb-1 bg-black border border-[#33ff33]/50 min-w-full"
+          {/* Speed selector - only in replay mode */}
+          {!isLive && (
+            <div className="flex items-center gap-2" ref={speedMenuRef}>
+              <span className="text-[#33ff33]/50 text-xs">SPD:</span>
+              <div className="relative">
+                <button
+                  onClick={() => setSpeedMenuOpen(!speedMenuOpen)}
+                  className="bg-black border border-[#33ff33]/50 text-[#33ff33] text-xs px-3 py-1 cursor-pointer hover:bg-[#33ff33]/10 focus:outline-none focus:border-[#33ff33] flex items-center gap-3"
                   style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
                 >
-                  {SPEED_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        setPlaySpeed(option.value)
-                        setSpeedMenuOpen(false)
-                      }}
-                      className={`w-full text-left px-3 py-1 text-xs cursor-pointer transition-colors ${
-                        playSpeed === option.value 
-                          ? 'bg-[#33ff33] text-black' 
-                          : 'text-[#33ff33] hover:bg-[#33ff33]/20'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
+                  <span>{SPEED_OPTIONS.find(o => o.value === playSpeed)?.label || 'MAX'}</span>
+                  <svg 
+                    className={`w-3 h-3 text-[#33ff33]/60 transition-transform ${speedMenuOpen ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {speedMenuOpen && (
+                  <div 
+                    className="absolute bottom-full left-0 mb-1 bg-black border border-[#33ff33]/50 min-w-full"
+                    style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
+                  >
+                    {SPEED_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setPlaySpeed(option.value)
+                          setSpeedMenuOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-1 text-xs cursor-pointer transition-colors ${
+                          playSpeed === option.value 
+                            ? 'bg-[#33ff33] text-black' 
+                            : 'text-[#33ff33] hover:bg-[#33ff33]/20'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         <div className="border-t border-[#33ff33]/30" />
@@ -822,7 +983,9 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
         stops={stops}
         currentIndex={currentIndex}
         onSelectStop={handleSelectStop}
-        isReplaying={isPlaying}
+        isReplaying={isLive ? isFollowingLive : isPlaying}
+        isLive={isLive}
+        liveIndex={liveIndex}
       />
     </div>
   )
