@@ -143,7 +143,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   const [globeReady, setGlobeReady] = useState(false)
   const [GlobeComponent, setGlobeComponent] = useState<any>(null)
   const [currentSimTime, setCurrentSimTime] = useState<number>(0)
-  const [cameraAltitude, setCameraAltitude] = useState<number>(2)
+  const defaultCameraAltitude = 1.7 // Slightly closer default zoom (~33% closer)
+  const [cameraAltitude, setCameraAltitude] = useState<number>(defaultCameraAltitude)
   const [flightLogOpen, setFlightLogOpen] = useState(true)
   
   // Loading state
@@ -199,7 +200,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
   useEffect(() => {
     if (globeReady && globeRef.current && !initialized) {
       // Point at North Pole
-      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: 2.5 }, 0)
+      globeRef.current.pointOfView({ lat: 90, lng: 0, altitude: defaultCameraAltitude }, 0)
       setInitialized(true)
     }
   }, [globeReady, initialized])
@@ -379,7 +380,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv' 
     // Only set lat/lng, preserve user's altitude/zoom
     const currentPov = globeRef.current.pointOfView()
     globeRef.current.pointOfView(
-      { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? 2 }, 
+      { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? defaultCameraAltitude },
       isPlaying ? 0 : 300  // No animation during playback to avoid zoom fighting
     )
   }, [currentIndex, stops, globeReady, isPlaying, travelProgress])
