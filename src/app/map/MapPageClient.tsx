@@ -29,6 +29,7 @@ const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
 
 interface MapPageClientProps {
   flightParam: string
+  mode?: 'replay' | 'live'
 }
 
 // Generate flight title from filename - supports YYYY_santa_tracker_weather format
@@ -42,12 +43,13 @@ function getFlightTitle(filename: string): string {
   return filename.replace(/[-_]/g, ' ').toUpperCase()
 }
 
-export default function MapPageClient({ flightParam }: MapPageClientProps) {
+export default function MapPageClient({ flightParam, mode = 'replay' }: MapPageClientProps) {
   const router = useRouter()
 
   const flightLogName = useMemo(() => flightParam.replace(/\.csv$/, ''), [flightParam])
   const dataFile = `/${flightLogName}.csv`
   const flightLogTitle = useMemo(() => getFlightTitle(flightLogName), [flightLogName])
+  const isLiveMode = mode === 'live'
 
   // ESC key to go back
   useEffect(() => {
@@ -120,7 +122,7 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
 
       {/* Globe container with scrubber */}
       <div className="absolute inset-0">
-        <GlobeMap dataFile={dataFile} />
+        <GlobeMap dataFile={dataFile} mode={mode} />
       </div>
 
       {/* Header */}
@@ -142,6 +144,12 @@ export default function MapPageClient({ flightParam }: MapPageClientProps) {
             </Link>
             <span style={{ textShadow: 'none' }}>🎅</span>
             <h1 className="text-[#33ff33] text-sm tracking-wider uppercase">{flightLogTitle}</h1>
+            {isLiveMode && (
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] uppercase tracking-wider animate-pulse">
+                <span className="w-2 h-2 bg-white rounded-full" />
+                LIVE
+              </span>
+            )}
           </div>
         </div>
       </header>

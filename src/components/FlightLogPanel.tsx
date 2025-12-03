@@ -32,6 +32,8 @@ interface FlightLogPanelProps {
   currentIndex: number
   onSelectStop: (index: number) => void
   isReplaying?: boolean
+  isLive?: boolean
+  liveIndex?: number
 }
 
 // Number of items to load per batch
@@ -44,6 +46,8 @@ export default function FlightLogPanel({
   currentIndex,
   onSelectStop,
   isReplaying = false,
+  isLive = false,
+  liveIndex = 0,
 }: FlightLogPanelProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -187,7 +191,11 @@ export default function FlightLogPanel({
 
   // Build the base list depending on mode
   const baseStops = useMemo(() => {
-    if (inReplayMode) {
+    if (isLive) {
+      // Live mode: only show stops up to liveIndex (what has actually happened)
+      const visitedStops = stops.slice(0, liveIndex + 1)
+      return [...visitedStops].reverse() // Most recently visited at top
+    } else if (inReplayMode) {
       // In replay mode: only show visited stops (0 to currentIndex), newest visited at top
       // This creates a "live feed" effect - new stops appear at top, push older down
       const visitedStops = stops.slice(0, currentIndex + 1)
@@ -196,7 +204,7 @@ export default function FlightLogPanel({
       // Browsing: all stops, most recent (highest index) first
       return [...stops].reverse()
     }
-  }, [stops, currentIndex, inReplayMode])
+  }, [stops, currentIndex, inReplayMode, isLive, liveIndex])
 
   // Filter by search query
   const filteredStops = useMemo(() => {
@@ -234,6 +242,43 @@ export default function FlightLogPanel({
       observerRef.current?.disconnect()
     }
   }, [loadedCount, filteredStops.length])
+
+  // Scroll to current stop when scrubbing (in live mode or replay mode)
+  // Track the last scrolled-to index to avoid unnecessary re-scrolls
+  const lastScrolledIndexRef = useRef<number>(-1)
+  
+  useEffect(() => {
+    if (!isOpen || stops.length === 0) return
+    
+    const currentStop = stops[currentIndex]
+    if (!currentStop) return
+    
+    // Don't re-scroll if we already scrolled to this index
+    if (lastScrolledIndexRef.current === currentIndex) return
+    lastScrolledIndexRef.current = currentIndex
+    
+    // In live mode, the list is reversed: baseStops[0] = most recent (liveIndex)
+    // So currentIndex maps to position: (maxIndex - currentIndex) in the reversed list
+    const maxIndex = isLive ? liveIndex : (inReplayMode ? currentIndex : stops.length - 1)
+    const positionInReversedList = maxIndex - currentIndex
+    
+    // Ensure enough items are loaded to include the current stop
+    const neededCount = positionInReversedList + 1
+    if (neededCount > loadedCount) {
+      // Load just enough to show the target stop, plus a small buffer
+      setLoadedCount(Math.min(neededCount + 20, filteredStops.length))
+    }
+    
+    // Use requestAnimationFrame to wait for DOM update, then scroll
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const stopElement = document.querySelector(`[data-stop-number="${currentStop.stop_number}"]`)
+        if (stopElement) {
+          stopElement.scrollIntoView({ behavior: 'instant', block: 'center' })
+        }
+      })
+    })
+  }, [currentIndex, isOpen, stops, isLive, liveIndex, inReplayMode, loadedCount, filteredStops.length])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -526,6 +571,7 @@ export default function FlightLogPanel({
                   return (
                     <button
                       key={stop.stop_number}
+                      data-stop-number={stop.stop_number}
                       onClick={() => handleStopClick(stop)}
                       className={`
                         w-full text-left px-3 py-2.5 transition-colors border-l-2
@@ -594,12 +640,14 @@ export default function FlightLogPanel({
           <div className="flex-shrink-0 px-3 py-1.5 border-t border-[#33ff33]/30 bg-[#33ff33]/5">
             <div className="flex justify-between text-[10px] text-[#33ff33]/40 uppercase tracking-wider">
               <span>
-                {inReplayMode 
-                  ? `${currentIndex + 1} stops visited${!isReplaying ? ' • Paused' : ''}`
-                  : `Showing ${visibleStops.length} of ${filteredStops.length}`
+                {isLive 
+                  ? `${liveIndex + 1} stops • LIVE`
+                  : inReplayMode 
+                    ? `${currentIndex + 1} stops visited${!isReplaying ? ' • Paused' : ''}`
+                    : `Showing ${visibleStops.length} of ${filteredStops.length}`
                 }
               </span>
-              {!inReplayMode && loadedCount < filteredStops.length && (
+              {!inReplayMode && !isLive && loadedCount < filteredStops.length && (
                 <span>↓ Scroll for more</span>
               )}
             </div>
