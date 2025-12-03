@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate on or around December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are dected at or around the north pole on December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
 // Typewriter component for streaming text
 function TypewriterText({
@@ -184,6 +184,7 @@ interface MenuItem {
   text?: string
   delay: number
   type?: 'hr' | 'countdown'
+  isSecurityBypass?: boolean
 }
 
 interface CommandOption {
@@ -221,14 +222,14 @@ const MENU_ITEMS: MenuItem[] = [
   { text: '    ACCESSING NORAD MAINFRAME...', delay: 3000 },
   { text: '    正在连接中国的远程雷达与空中预警指挥网络……', delay: 3300 },
   { text: '    Подключение к системе раннего предупреждения и противовоздушной обороны ВКС…', delay: 3600 },
-  { text: '    BYPASSING SECURITY PROTOCOLS...', delay: 3900 },
-  { text: '', delay: 4200 },
-  { text: '    SYSTEM STATUS........ STANDBY', delay: 4400 },
-  { text: '    SANTA ACTIVITY....... NOT DETECTED', delay: 4600 },
-  { type: 'countdown', delay: 4800 },
-  { text: '', delay: 5000 },
-  { type: 'hr', delay: 5100 },
-  { text: '', delay: 5000 },
+  { text: '    BYPASSING SECURITY PROTOCOLS', delay: 3900, isSecurityBypass: true },
+  { text: '', delay: 7200 },
+  { text: '    DETECTING NORTH POLE MAGIC LEVELS..... NOMINAL', delay: 7400 },
+  { text: '    SYSTEM STATUS........ STANDBY', delay: 7600 },
+  { type: 'countdown', delay: 7800 },
+  { text: '', delay: 8000 },
+  { type: 'hr', delay: 8100 },
+  { text: '', delay: 8200 },
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
@@ -414,24 +415,50 @@ export default function Home() {
     )
 
     MENU_ITEMS.forEach((item, index) => {
-      timers.push(
-        setTimeout(
-          () =>
+      if (item.isSecurityBypass) {
+        // Handle security bypass with 3-second spinner animation
+        const entryId = `menu-${index}`
+        const frames = ['/', '—', '\\', '|']
+        
+        // Append initial entry
+        timers.push(
+          setTimeout(() => {
             appendEntry({
-              id: `menu-${index}`,
-              kind: item.type === 'hr' ? 'hr' : item.type === 'countdown' ? 'countdown' : 'text',
-              text: item.text,
-            }),
-          item.delay,
-        ),
-      )
+              id: entryId,
+              kind: 'text',
+              text: `${item.text} ${frames[0]} ...`,
+            })
+          }, item.delay)
+        )
+        
+        // Schedule animation frames for 3 seconds (25 frames at 120ms each)
+        for (let i = 1; i <= 25; i++) {
+          timers.push(
+            setTimeout(() => {
+              updateEntry(entryId, `${item.text} ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+            }, item.delay + (i * 120))
+          )
+        }
+      } else {
+        timers.push(
+          setTimeout(
+            () =>
+              appendEntry({
+                id: `menu-${index}`,
+                kind: item.type === 'hr' ? 'hr' : item.type === 'countdown' ? 'countdown' : 'text',
+                text: item.text,
+              }),
+            item.delay,
+          ),
+        )
+      }
     })
 
     timers.push(
       setTimeout(() => {
         appendOptionsEntry()
         setShowPrompt(true)
-      }, 5200),
+      }, 8400),
     )
 
     timersRef.current = timers
@@ -1017,7 +1044,7 @@ export default function Home() {
             if (entry.kind === 'countdown') {
               return (
                 <div key={entry.id} className="min-h-[1.5em]">
-                  {'    '}COUNTDOWN TO CHRISTMAS .. {String(countdown.days).padStart(2, '0')}D {String(countdown.hours).padStart(2, '0')}H {String(countdown.minutes).padStart(2, '0')}M {String(countdown.seconds).padStart(2, '0')}S
+                  {'    '}COUNTDOWN TO SANTA TIME .. {String(countdown.days).padStart(2, '0')}D {String(countdown.hours).padStart(2, '0')}H {String(countdown.minutes).padStart(2, '0')}M {String(countdown.seconds).padStart(2, '0')}S
                 </div>
               )
             }
