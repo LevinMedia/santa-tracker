@@ -608,7 +608,7 @@ export default function FlightLogPanel({
       </div>
 
       {selectedStop && (
-        <div className="fixed inset-0 z-[1003] flex items-center justify-center md:items-start md:justify-center md:pt-16 md:pointer-events-none font-mono">
+        <div className="fixed inset-0 z-[1003] flex items-center justify-center md:items-start md:justify-start md:pt-16 md:pl-6 md:pointer-events-none font-mono">
           {/* Mobile backdrop only */}
           <div
             className="absolute inset-0 bg-black/70 md:hidden"
