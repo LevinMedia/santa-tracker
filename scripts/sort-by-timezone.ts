@@ -90,3 +90,5 @@ console.log(`   🌅 First city: ${sortedCities[0].city} (UTC+${sortedCities[0].
 console.log(`   🌃 Last city: ${sortedCities[sortedCities.length - 1].city} (UTC${sortedCities[sortedCities.length - 1].utc_offset})`);
 
 
+
+
