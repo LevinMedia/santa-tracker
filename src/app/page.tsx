@@ -1,10 +1,13 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
+import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are dected at or around the north pole on December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+
+const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
 // Typewriter component for streaming text
 function TypewriterText({
@@ -109,7 +112,7 @@ function OptionsEntry({
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
       <p className="mb-4">
         <TypewriterText
-          text={ANNOUNCEMENT_TEXT}
+          text={isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT}
           isActive={isActive}
           onComplete={handleTypewriterComplete}
           onProgress={isActive ? onElementAppear : undefined}
@@ -267,14 +270,12 @@ const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
 
-// Live flight configuration
-const LIVE_FLIGHT_FILE = '2025_santa_tracker'
-// Flight window: Dec 2, 10:00 UTC to Dec 4, 12:00 UTC (for testing - would be Dec 24-26 in production)
-const LIVE_FLIGHT_START_UTC = new Date('2025-12-02T10:00:00Z').getTime()
-const LIVE_FLIGHT_END_UTC = new Date('2025-12-04T12:00:00Z').getTime()
+// Live flight configuration - imported from build-time generated constants
+// See: scripts/generate-flight-window.ts
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [entries, setEntries] = useState<TerminalEntry[]>([])
   const [showPrompt, setShowPrompt] = useState(false)
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -331,18 +332,24 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [getNextChristmas])
 
-  // Check if Santa is currently live (within flight window)
+  // Check if Santa is currently live (within flight window or forced via URL param)
   useEffect(() => {
+    const forceLive = searchParams.get('forceLive') === 'true'
+    
     const checkLiveStatus = () => {
+      if (forceLive) {
+        setIsSantaLive(true)
+        return
+      }
       const now = Date.now()
-      const isLive = now >= LIVE_FLIGHT_START_UTC && now <= LIVE_FLIGHT_END_UTC
+      const isLive = now >= FLIGHT_START && now <= FLIGHT_END
       setIsSantaLive(isLive)
     }
     
     checkLiveStatus()
     const interval = setInterval(checkLiveStatus, 10000) // Check every 10 seconds
     return () => clearInterval(interval)
-  }, [])
+  }, [searchParams])
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -1140,14 +1147,25 @@ export default function Home() {
             if (entry.kind === 'countdown') {
               return (
                 <div key={entry.id} className="min-h-[1.5em]">
-                  {'    '}COUNTDOWN TO SANTA TIME .. {String(countdown.days).padStart(2, '0')}D {String(countdown.hours).padStart(2, '0')}H {String(countdown.minutes).padStart(2, '0')}M {String(countdown.seconds).padStart(2, '0')}S
+                  {isSantaLive 
+                    ? <>{"    IT'S SANTA TIME LET'S GOOOOO "}<span style={{ textShadow: 'none' }}>🎅🎄🎁</span></>
+                    : `    COUNTDOWN TO SANTA TIME .. ${String(countdown.days).padStart(2, '0')}D ${String(countdown.hours).padStart(2, '0')}H ${String(countdown.minutes).padStart(2, '0')}M ${String(countdown.seconds).padStart(2, '0')}S`
+                  }
                 </div>
               )
             }
 
+            // Apply live mode text replacements
+            let displayText = entry.text
+            if (isSantaLive && displayText) {
+              displayText = displayText
+                .replace('NOMINAL', 'ELEVATED')
+                .replace('STANDBY', 'ACTIVE')
+            }
+
             return (
               <div key={entry.id} className={`min-h-[1.5em] ${entry.className || ''}`}>
-                {entry.text}
+                {displayText}
               </div>
             )
           })}
@@ -1180,5 +1198,13 @@ export default function Home() {
         <span>{currentTime}</span>
       </div>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <HomeContent />
+    </Suspense>
   )
 }
