@@ -8,15 +8,15 @@
 export const LIVE_FLIGHT_FILE = '2025_santa_tracker'
 
 /** Flight start timestamp (first stop UTC time) */
-export const FLIGHT_START = 1764669600000
+export const FLIGHT_START = 1764842400000
 
 /** Flight end timestamp (last stop UTC time) */
-export const FLIGHT_END = 1764761400000
+export const FLIGHT_END = 1764934200000
 
 /** Human-readable flight window */
 export const FLIGHT_WINDOW = {
-  start: '2025-12-02 10:00:00',
-  end: '2025-12-03 11:30:00',
-  startISO: '2025-12-02T10:00:00.000Z',
-  endISO: '2025-12-03T11:30:00.000Z',
+  start: '2025-12-04 10:00:00',
+  end: '2025-12-05 11:30:00',
+  startISO: '2025-12-04T10:00:00.000Z',
+  endISO: '2025-12-05T11:30:00.000Z',
 }

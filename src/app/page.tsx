@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 
@@ -273,7 +273,7 @@ const COMMAND_OPTIONS: CommandOption[] = [
 // Live flight configuration - imported from build-time generated constants
 // See: scripts/generate-flight-window.ts
 
-export default function Home() {
+function HomeContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [entries, setEntries] = useState<TerminalEntry[]>([])
@@ -1198,5 +1198,13 @@ export default function Home() {
         <span>{currentTime}</span>
       </div>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <HomeContent />
+    </Suspense>
   )
 }
