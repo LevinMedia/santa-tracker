@@ -77,6 +77,13 @@ export default function FlightLogPanel({
     window.addEventListener('resize', checkDesktop)
     return () => window.removeEventListener('resize', checkDesktop)
   }, [])
+
+  // Ticker for updating relative times
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(interval)
+  }, [])
   
   // Load freedom units preference from localStorage
   useEffect(() => {
@@ -415,11 +422,61 @@ export default function FlightLogPanel({
     touchEndX.current = null
   }, [nextStop, prevStop, navigateToStop])
 
-  // Format time for display (short version for list)
-  const formatTime = (utcTime: string) => {
+  // Format time for display (short version for list) - now includes date
+  const formatTimeWithDate = (utcTime: string) => {
     if (!utcTime) return '--:--'
-    const parts = utcTime.split(' ')
-    return parts[1] || utcTime
+    try {
+      const date = new Date(utcTime.replace(' ', 'T') + 'Z')
+      if (isNaN(date.getTime())) return utcTime
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    } catch {
+      return utcTime
+    }
+  }
+
+  // Format relative time (e.g., "2h 30m 15s ago" if < 24 hours, otherwise "2 days ago")
+  const formatRelativeTime = (utcTime: string): string => {
+    if (!utcTime) return ''
+    try {
+      const date = new Date(utcTime.replace(' ', 'T') + 'Z')
+      if (isNaN(date.getTime())) return ''
+      
+      const now = Date.now()
+      const diff = now - date.getTime()
+      
+      // If in the future, show "upcoming"
+      if (diff < 0) return 'upcoming'
+      
+      const seconds = Math.floor(diff / 1000)
+      const minutes = Math.floor(seconds / 60)
+      const hours = Math.floor(minutes / 60)
+      const days = Math.floor(hours / 24)
+      
+      if (days > 0) {
+        return `${days}d ago`
+      }
+      
+      // Less than 24 hours - show h m s
+      const h = hours
+      const m = minutes % 60
+      const s = seconds % 60
+      
+      if (h > 0) {
+        return `${h}h ${m}m ${s}s ago`
+      } else if (m > 0) {
+        return `${m}m ${s}s ago`
+      } else {
+        return `${s}s ago`
+      }
+    } catch {
+      return ''
+    }
   }
 
   // Format datetime for human-readable display (e.g., "December 25, 2024 12:00 AM")
@@ -597,11 +654,11 @@ export default function FlightLogPanel({
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className={`text-[10px] ${isSelected ? 'text-black/70' : 'text-[#33ff33]/60'}`}>
-                            {formatTime(stop.utc_time)}
+                          <div className={`text-[9px] ${isSelected ? 'text-black/60' : 'text-[#33ff33]/50'}`}>
+                            {formatRelativeTime(stop.utc_time)}
                           </div>
-                          <div className={`text-[8px] uppercase ${isSelected ? 'text-black/50' : 'text-[#33ff33]/30'}`}>
-                            UTC
+                          <div className={`text-[10px] ${isSelected ? 'text-black/70' : 'text-[#33ff33]/60'}`}>
+                            {formatTimeWithDate(stop.utc_time)} UTC
                           </div>
                         </div>
                       </div>
@@ -685,8 +742,8 @@ export default function FlightLogPanel({
             <div className="p-4 space-y-4 text-[#33ff33] flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Local Time</div>
-                  <div className="text-sm">{formatDateTime(selectedStop.local_time)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Visited</div>
+                  <div className="text-sm">{formatRelativeTime(selectedStop.utc_time)}</div>
                   <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mt-2">UTC Time</div>
                   <div className="text-sm">{formatDateTime(selectedStop.utc_time)}</div>
                 </div>
