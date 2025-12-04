@@ -118,7 +118,7 @@ function OptionsEntry({
       {showCTA && (
         <>
           <div>Click, tap or enter command to continue:</div>
-          <div className="mt-3 flex flex-col gap-2">
+          <div className="mt-3 inline-flex flex-col gap-2">
             {/* LIVE NOW button - shown first when Santa is live */}
             {isSantaLive && (
               <div className="min-h-[1.5em]">
@@ -129,7 +129,7 @@ function OptionsEntry({
                     trackCommandClick('L', 'LIVE NOW - TRACK SANTA')
                     onCommand('L')
                   }}
-                  className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 ${
+                  className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap ${
                     !isActive
                       ? 'bg-red-900/50 text-red-300 border border-dashed border-red-500/50 opacity-50 cursor-not-allowed'
                       : 'bg-red-600 text-white border border-red-500 hover:bg-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] cursor-pointer animate-pulse'
@@ -156,7 +156,7 @@ function OptionsEntry({
                     trackCommandClick(option.key, option.label)
                     onCommand(option.key)
                   }}
-                  className={`flex sm:inline-flex w-full sm:w-auto items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 bg-black text-[#33ff33] ${
+                  className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap bg-black text-[#33ff33] ${
                     option.href === '#' || !isActive
                       ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
                       : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
@@ -261,7 +261,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
-  { key: 'P', label: 'VIEW PREVIOUS FLIGHTS', href: '/flights', delay: 5400 },
+  { key: 'V', label: 'VIEW PREVIOUS FLIGHTS', href: '/flights', delay: 5400 },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
@@ -761,7 +761,7 @@ export default function Home() {
         return
       }
 
-      if (normalized === '1' || normalized === 'P') {
+      if (normalized === '1' || normalized === 'V') {
         setIsProcessing(true)
         setShowPrompt(false)
         setActiveOptionsId(null)
