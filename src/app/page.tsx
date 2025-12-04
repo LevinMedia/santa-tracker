@@ -5,7 +5,9 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are dected at or around the north pole on December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+
+const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
 // Typewriter component for streaming text
 function TypewriterText({
@@ -110,7 +112,7 @@ function OptionsEntry({
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
       <p className="mb-4">
         <TypewriterText
-          text={ANNOUNCEMENT_TEXT}
+          text={isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT}
           isActive={isActive}
           onComplete={handleTypewriterComplete}
           onProgress={isActive ? onElementAppear : undefined}
@@ -1138,14 +1140,25 @@ export default function Home() {
             if (entry.kind === 'countdown') {
               return (
                 <div key={entry.id} className="min-h-[1.5em]">
-                  {'    '}COUNTDOWN TO SANTA TIME .. {String(countdown.days).padStart(2, '0')}D {String(countdown.hours).padStart(2, '0')}H {String(countdown.minutes).padStart(2, '0')}M {String(countdown.seconds).padStart(2, '0')}S
+                  {isSantaLive 
+                    ? "    IT'S SANTA TIME LET'S GOOOOO 🎅🎄🎁"
+                    : `    COUNTDOWN TO SANTA TIME .. ${String(countdown.days).padStart(2, '0')}D ${String(countdown.hours).padStart(2, '0')}H ${String(countdown.minutes).padStart(2, '0')}M ${String(countdown.seconds).padStart(2, '0')}S`
+                  }
                 </div>
               )
             }
 
+            // Apply live mode text replacements
+            let displayText = entry.text
+            if (isSantaLive && displayText) {
+              displayText = displayText
+                .replace('NOMINAL', 'ELEVATED')
+                .replace('STANDBY', 'ACTIVE')
+            }
+
             return (
               <div key={entry.id} className={`min-h-[1.5em] ${entry.className || ''}`}>
-                {entry.text}
+                {displayText}
               </div>
             )
           })}
