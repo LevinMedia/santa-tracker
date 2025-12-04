@@ -243,8 +243,7 @@ export default function FlightLogPanel({
     }
   }, [loadedCount, filteredStops.length])
 
-  // Scroll to current stop when scrubbing (in live mode or replay mode)
-  // Track the last scrolled-to index to avoid unnecessary re-scrolls
+  // Scroll to current stop when scrubbing - only if already in DOM (don't mass-load items)
   const lastScrolledIndexRef = useRef<number>(-1)
   
   useEffect(() => {
@@ -257,28 +256,14 @@ export default function FlightLogPanel({
     if (lastScrolledIndexRef.current === currentIndex) return
     lastScrolledIndexRef.current = currentIndex
     
-    // In live mode, the list is reversed: baseStops[0] = most recent (liveIndex)
-    // So currentIndex maps to position: (maxIndex - currentIndex) in the reversed list
-    const maxIndex = isLive ? liveIndex : (inReplayMode ? currentIndex : stops.length - 1)
-    const positionInReversedList = maxIndex - currentIndex
-    
-    // Ensure enough items are loaded to include the current stop
-    const neededCount = positionInReversedList + 1
-    if (neededCount > loadedCount) {
-      // Load just enough to show the target stop, plus a small buffer
-      setLoadedCount(Math.min(neededCount + 20, filteredStops.length))
-    }
-    
-    // Use requestAnimationFrame to wait for DOM update, then scroll
+    // Only scroll if the element is already in the DOM (don't load thousands of items)
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        const stopElement = document.querySelector(`[data-stop-number="${currentStop.stop_number}"]`)
-        if (stopElement) {
-          stopElement.scrollIntoView({ behavior: 'instant', block: 'center' })
-        }
-      })
+      const stopElement = document.querySelector(`[data-stop-number="${currentStop.stop_number}"]`)
+      if (stopElement) {
+        stopElement.scrollIntoView({ behavior: 'instant', block: 'center' })
+      }
     })
-  }, [currentIndex, isOpen, stops, isLive, liveIndex, inReplayMode, loadedCount, filteredStops.length])
+  }, [currentIndex, isOpen, stops])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -288,21 +273,23 @@ export default function FlightLogPanel({
         return
       }
       
-      // Arrow key navigation when panel is open and not actively replaying
-      // Down = next visual item (earlier stop), Up = previous visual item (later stop)
-      if (isOpen && !isReplaying && !selectedStop) {
+      // Arrow key navigation when panel is open (works even during playback)
+      // Down = earlier stop (lower index), Up = later stop (higher index)
+      if (isOpen && !selectedStop) {
         if (e.key === 'ArrowDown' && currentIndex > 0) {
           e.preventDefault()
+          e.stopPropagation()
           onSelectStop(currentIndex - 1)
         } else if (e.key === 'ArrowUp' && currentIndex < stops.length - 1) {
           e.preventDefault()
+          e.stopPropagation()
           onSelectStop(currentIndex + 1)
         }
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose, isReplaying, currentIndex, stops.length, onSelectStop, selectedStop])
+    window.addEventListener('keydown', handleKeyDown, true) // Use capture phase
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isOpen, onClose, currentIndex, stops.length, onSelectStop, selectedStop])
 
   const handleStopClick = useCallback(
     (stop: FlightStop) => {
