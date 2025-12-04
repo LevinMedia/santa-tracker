@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, startTransition } from 'react'
 import FlightLogPanel from './FlightLogPanel'
+import { fetchWeatherBatch, getNextTimezone } from '@/lib/weather'
 
 interface FlightStop {
   stop_number: number
@@ -158,6 +159,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   const [liveTravelProgress, setLiveTravelProgress] = useState(0)
   const [isFollowingLive, setIsFollowingLive] = useState(mode === 'live')
   const isLive = mode === 'live'
+  
+  // Weather fetching state (for live mode)
+  const fetchedTimezonesRef = useRef<Set<number>>(new Set())
+  const [weatherFetchStatus, setWeatherFetchStatus] = useState<string>('')
   
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
@@ -364,6 +369,116 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     
     return () => clearInterval(interval)
   }, [isLive, loading, stops, isFollowingLive, formatUTCTime])
+
+  // Live mode: Fetch weather for current and next timezone
+  useEffect(() => {
+    if (!isLive || loading || stops.length === 0) return
+    
+    const currentStop = stops[liveIndex]
+    if (!currentStop?.utc_offset_rounded) return
+    
+    const currentTz = currentStop.utc_offset_rounded
+    const nextTz = getNextTimezone(stops, liveIndex)
+    
+    // Fetch weather for current timezone if not already fetched
+    const fetchWeatherForTimezone = async (tzOffset: number) => {
+      if (fetchedTimezonesRef.current.has(tzOffset)) return
+      
+      // Mark as fetched immediately to prevent duplicate requests
+      fetchedTimezonesRef.current.add(tzOffset)
+      
+      // Get all stops in this timezone
+      const tzStops = stops
+        .map((stop, idx) => ({ ...stop, originalIndex: idx }))
+        .filter(stop => stop.utc_offset_rounded === tzOffset)
+      
+      if (tzStops.length === 0) return
+      
+      setWeatherFetchStatus(`Fetching weather for UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}...`)
+      console.log(`🌤️ Fetching weather for ${tzStops.length} stops in UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
+      
+      try {
+        const locations = tzStops.map(stop => ({
+          lat: stop.lat,
+          lng: stop.lng,
+          index: stop.originalIndex
+        }))
+        
+        const weatherData = await fetchWeatherBatch(locations)
+        
+        // Update stops with weather data (in-memory)
+        setStops(prevStops => {
+          const newStops = [...prevStops]
+          weatherData.forEach((weather, index) => {
+            if (newStops[index]) {
+              newStops[index] = {
+                ...newStops[index],
+                temperature_c: weather.temperature_c,
+                weather_condition: weather.weather_condition,
+                wind_speed_mps: weather.wind_speed_mps,
+                wind_direction_deg: weather.wind_direction_deg,
+                wind_gust_mps: weather.wind_gust_mps,
+              }
+            }
+          })
+          return newStops
+        })
+        
+        // Save weather to CSV file for persistence
+        const weatherUpdates = tzStops
+          .filter(stop => weatherData.has(stop.originalIndex))
+          .map(stop => {
+            const weather = weatherData.get(stop.originalIndex)!
+            return {
+              stop_number: stop.stop_number,
+              temperature_c: weather.temperature_c,
+              weather_condition: weather.weather_condition,
+              wind_speed_mps: weather.wind_speed_mps,
+              wind_direction_deg: weather.wind_direction_deg,
+              wind_gust_mps: weather.wind_gust_mps,
+            }
+          })
+        
+        // Call API to persist weather to CSV
+        if (weatherUpdates.length > 0) {
+          fetch('/api/weather/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              updates: weatherUpdates,
+              dataFile: dataFile.replace(/^\//, '')
+            })
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.success) {
+                console.log(`💾 Saved weather to CSV: ${data.updatedCount} stops`)
+              }
+            })
+            .catch(err => console.error('Failed to save weather to CSV:', err))
+        }
+        
+        setWeatherFetchStatus(`Weather updated for UTC${tzOffset >= 0 ? '+' : ''}${tzOffset} (${weatherData.size} stops)`)
+        console.log(`✅ Weather updated for ${weatherData.size} stops in UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
+        
+        // Clear status after 3 seconds
+        setTimeout(() => setWeatherFetchStatus(''), 3000)
+      } catch (error) {
+        console.error(`Error fetching weather for UTC${tzOffset}:`, error)
+        setWeatherFetchStatus(`Weather fetch failed for UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
+        // Remove from fetched set so we can retry
+        fetchedTimezonesRef.current.delete(tzOffset)
+      }
+    }
+    
+    // Fetch current timezone
+    fetchWeatherForTimezone(currentTz)
+    
+    // Pre-fetch next timezone if we know what it is
+    if (nextTz !== null) {
+      fetchWeatherForTimezone(nextTz)
+    }
+  }, [isLive, loading, stops, liveIndex, dataFile])
 
   // Real-time playback
   useEffect(() => {
@@ -662,6 +777,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     const startIndex = Math.max(0, totalVisited - MAX_POINTS)
     const visibleStops = stops.slice(startIndex, totalVisited)
     
+    // Determine if we're animating (traveling between stops)
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const progress = travelProgress
+    
     return visibleStops.map((stop, idx) => {
       const isCurrentStop = stop.stop_number === currentStop?.stop_number
       
@@ -671,7 +790,27 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         opacity = idx / FADE_ZONE // 0 at oldest, 1 at FADE_ZONE
       }
       
-      // Convert opacity to color with alpha
+      // Current stop transitions as Santa travels to next stop:
+      // - Size: shrinks from currentMarkerSize to 0.08
+      // - Color: transitions from white to green
+      if (isCurrentStop && isAnimating && progress > 0) {
+        const targetSize = 0.08
+        const interpolatedSize = currentMarkerSize - (currentMarkerSize - targetSize) * progress
+        
+        // Interpolate color from white (255,255,255) to green (51,255,51)
+        const r = Math.round(255 - (255 - 51) * progress)
+        const g = 255 // stays at 255
+        const b = Math.round(255 - (255 - 51) * progress)
+        
+        return {
+          lat: stop.lat,
+          lng: stop.lng,
+          size: interpolatedSize,
+          color: `rgba(${r}, ${g}, ${b}, ${opacity})`,
+        }
+      }
+      
+      // Non-current stops or when paused
       const baseColor = isCurrentStop ? '255, 255, 255' : '51, 255, 51'
       
       return {
@@ -681,7 +820,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         color: `rgba(${baseColor}, ${opacity})`,
       }
     })
-  }, [stops, currentIndex, currentStop, currentMarkerSize])
+  }, [stops, currentIndex, currentStop, currentMarkerSize, travelProgress, isPlaying, isLive, isFollowingLive])
 
   
   // Prepare arc data for travel animation (3D arcs through space)
@@ -753,44 +892,51 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
       })
     }
     
-    // Fading arcs trail - 3 previous arcs with stable opacities (no flickering)
-    // Arc 1: Most recent
+    // Fading arcs trail - 3 previous arcs that fade continuously based on progress
+    // As Santa travels to next stop, trails fade down. Arc 3 fully fades out by arrival.
+    
+    // Arc 1: Most recent - fades from 0.5 to 0.3
     if (isAnimating && currentStop && prevStop) {
+      const opacity1 = 0.5 - (0.2 * activeProgress)
       arcs.push({
         startLat: currentStop.lat,
         startLng: currentStop.lng,
         endLat: prevStop.lat,
         endLng: prevStop.lng,
-        opacity: 0.5,
+        opacity: opacity1,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
       })
     }
     
-    // Arc 2: Second most recent
+    // Arc 2: Second most recent - fades from 0.3 to 0.15
     if (isAnimating && prevStop && prevStop2) {
+      const opacity2 = 0.3 - (0.15 * activeProgress)
       arcs.push({
         startLat: prevStop.lat,
         startLng: prevStop.lng,
         endLat: prevStop2.lat,
         endLng: prevStop2.lng,
-        opacity: 0.3,
+        opacity: opacity2,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
       })
     }
     
-    // Arc 3: Third most recent
+    // Arc 3: Third most recent - fades from 0.15 to 0 (fully gone on arrival)
     if (isAnimating && prevStop2 && prevStop3) {
-      arcs.push({
-        startLat: prevStop2.lat,
-        startLng: prevStop2.lng,
-        endLat: prevStop3.lat,
-        endLng: prevStop3.lng,
-        opacity: 0.15,
-        dashLength: 1,
-        altitude: calcArcAltitude(prevStop3.lat, prevStop3.lng, prevStop2.lat, prevStop2.lng),
-      })
+      const opacity3 = 0.15 * (1 - activeProgress)
+      if (opacity3 > 0.01) { // Only render if visible
+        arcs.push({
+          startLat: prevStop2.lat,
+          startLng: prevStop2.lng,
+          endLat: prevStop3.lat,
+          endLng: prevStop3.lng,
+          opacity: opacity3,
+          dashLength: 1,
+          altitude: calcArcAltitude(prevStop3.lat, prevStop3.lng, prevStop2.lat, prevStop2.lng),
+        })
+      }
     }
     
     return arcs
@@ -1032,6 +1178,12 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
             <span className="text-[#33ff33]">{elapsedDisplay}</span>
           </span>
         </div>
+        {isLive && weatherFetchStatus && (
+          <div className="pb-2 text-xs text-[#33ff33]/70 flex items-center gap-2">
+            <span className="animate-pulse">🌤️</span>
+            <span>{weatherFetchStatus}</span>
+          </div>
+        )}
       </div>
       </div>
 

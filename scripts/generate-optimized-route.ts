@@ -291,8 +291,8 @@ function formatDateTime(date: Date): string {
 
 // Main function
 async function main() {
-  const inputFile = path.join(__dirname, '../public/2024_santa_tracker_weather.csv')
-  const outputFile = path.join(__dirname, '../public/2024_santa_tracker_weather.csv')
+  const inputFile = path.join(__dirname, '../public/2025_santa_tracker.csv')
+  const outputFile = path.join(__dirname, '../public/2025_santa_tracker.csv')
   
   console.log('🎅 Santa Route Optimizer')
   console.log('========================\n')
@@ -454,10 +454,26 @@ async function main() {
   const fullRoute: RouteStop[] = []
   let stopNumber = 1
   
-  const year = 2024
+  // Use current date to make flight "live" now
+  // Calculate the date so that "now" is roughly in the middle of the flight
+  const now = new Date()
   
-  // First stop in UTC+14 arrives at exactly midnight local (10:00 UTC Dec 24)
-  const firstTzMidnightUTC = new Date(Date.UTC(year, 11, 24, 10, 0, 0))
+  // Flight takes ~27 hours. To be "live" now, start the flight ~12 hours ago
+  // First stop in UTC+14 arrives at midnight local = 10:00 UTC that day
+  // So we want firstTzMidnightUTC to be about 12 hours before now
+  const hoursIntoFlight = 12 // Put us roughly in the middle
+  const firstTzMidnightUTC = new Date(now.getTime() - hoursIntoFlight * ONE_HOUR_MS)
+  
+  // Round to the nearest hour for cleaner timestamps
+  firstTzMidnightUTC.setMinutes(0, 0, 0)
+  
+  // Calculate what "year" and "day" this corresponds to for the local time calculations
+  const year = firstTzMidnightUTC.getUTCFullYear()
+  const month = firstTzMidnightUTC.getUTCMonth()
+  const day = firstTzMidnightUTC.getUTCDate()
+  const startHour = firstTzMidnightUTC.getUTCHours()
+  
+  console.log(`   Flight window: Starting ${firstTzMidnightUTC.toISOString()} (${hoursIntoFlight}h ago)`)
   
   // Calculate North Pole departure time:
   // Santa needs to travel from North Pole to first stop BEFORE midnight UTC+14
@@ -484,8 +500,10 @@ async function main() {
     const route = group.optimizedRoute
     
     // Midnight local time for this timezone
-    // UTC+14 midnight = 10:00 UTC, UTC+13 midnight = 11:00 UTC, etc.
-    const midnightUTC = new Date(Date.UTC(year, 11, 24, 10 + (14 - group.utc_offset), 0, 0))
+    // Each timezone starts 1 hour after the previous one
+    // UTC+14 starts at firstTzMidnightUTC, UTC+13 starts 1 hour later, etc.
+    const hoursAfterStart = 14 - group.utc_offset
+    const midnightUTC = new Date(firstTzMidnightUTC.getTime() + hoursAfterStart * ONE_HOUR_MS)
     
     // If UTC offset is negative, we're into Dec 25 UTC
     // e.g., UTC-5 midnight local = Dec 25 05:00 UTC
@@ -584,11 +602,11 @@ async function main() {
       stop.utc_time,
       stop.local_time,
       stop.population ?? '',
-      stop.temperature_c ?? '',
-      stop.weather_condition ? `"${stop.weather_condition}"` : '',
-      stop.wind_speed_mps ?? '',
-      stop.wind_direction_deg ?? '',
-      stop.wind_gust_mps ?? '',
+      '', // temperature_c - will be filled by live weather
+      '', // weather_condition - will be filled by live weather
+      '', // wind_speed_mps - will be filled by live weather
+      '', // wind_direction_deg - will be filled by live weather
+      '', // wind_gust_mps - will be filled by live weather
     ].join(',')
     outputLines.push(line)
   }
