@@ -690,6 +690,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   const prevStop2 = currentIndex > 1 ? stops[currentIndex - 2] : null
   const prevStop3 = currentIndex > 2 ? stops[currentIndex - 3] : null
   
+  // Calculate estimated position (tip of the arc when animating)
+  const estimatedPosition = useMemo(() => {
+    if (!currentStop) return null
+    
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const activeProgress = travelProgress
+    
+    if (isAnimating && nextStop && activeProgress > 0) {
+      return interpolateGreatCircle(currentStop, nextStop, activeProgress)
+    }
+    
+    // When not animating, show current stop position
+    return { lat: currentStop.lat, lng: currentStop.lng }
+  }, [currentStop, nextStop, travelProgress, isPlaying, isLive, isFollowingLive])
+  
   // Calculate arc altitude based on distance
   const calcArcAltitude = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
     const phi1 = lat1 * Math.PI / 180
@@ -877,12 +892,6 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
 
         <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
           <div className="flex items-center gap-2">
-            {isLive && isAtLiveEdge && (
-              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-red-600 text-white text-[10px] uppercase tracking-wider animate-pulse">
-                <span className="w-2 h-2 bg-white rounded-full animate-ping" style={{ animationDuration: '1.5s' }} />
-                LIVE
-              </span>
-            )}
             {isLive && !isFollowingLive && (
               <span className="px-2 py-0.5 bg-[#33ff33]/20 text-[#33ff33] text-[10px] uppercase tracking-wider">
                 VIEWING HISTORY
@@ -1013,9 +1022,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         
         <div className="border-t border-[#33ff33]/30" />
         
-        <div className="py-2 flex justify-between text-[#33ff33]/50 text-xs">
-          <span>PROGRESS: {progress.toFixed(1)}%</span>
-          <span>Elapsed: {elapsedDisplay}</span>
+        <div className="py-2 flex justify-between text-xs">
+          <span>
+            <span className="text-[#33ff33]/50">Est. Location: </span>
+            <span className="text-[#33ff33]">[{estimatedPosition ? `${estimatedPosition.lat.toFixed(4)} / ${estimatedPosition.lng.toFixed(4)}` : '-- / --'}]</span>
+          </span>
+          <span>
+            <span className="text-[#33ff33]/50">Elapsed: </span>
+            <span className="text-[#33ff33]">{elapsedDisplay}</span>
+          </span>
         </div>
       </div>
       </div>
