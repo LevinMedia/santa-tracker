@@ -784,10 +784,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   return (
     <div className="relative w-full h-full bg-black">
       {/* Main content wrapper - shrinks when panel is open (bottom on mobile, right on desktop) */}
-      <div 
+      <div
         className={`
           absolute inset-0 transition-all duration-300 ease-out
-          ${flightLogOpen ? 'bottom-[50vh] md:bottom-0 md:right-96' : 'bottom-0 md:right-0'}
+          ${flightLogOpen ? 'bottom-[45vh] md:bottom-0 md:right-96' : 'bottom-0 md:right-0'}
         `}
       >
         {/* Flight Log Trigger Button */}

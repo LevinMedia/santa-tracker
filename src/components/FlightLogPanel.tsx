@@ -462,7 +462,7 @@ export default function FlightLogPanel({
       <div
         className={`
           fixed z-[1002] font-mono
-          left-0 right-0 bottom-0 h-[50vh]
+          left-0 right-0 bottom-0 h-[45vh]
           md:left-auto md:right-0 md:top-0 md:bottom-0 md:h-full md:w-96
           transform transition-transform duration-300 ease-out
           ${isOpen ? 'translate-y-0 md:translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}
