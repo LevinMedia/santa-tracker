@@ -784,10 +784,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   return (
     <div className="relative w-full h-full bg-black">
       {/* Main content wrapper - shrinks when panel is open (bottom on mobile, right on desktop) */}
-      <div 
+      <div
         className={`
           absolute inset-0 transition-all duration-300 ease-out
-          ${flightLogOpen ? 'bottom-[50vh] md:bottom-0 md:right-96' : 'bottom-0 md:right-0'}
+          ${flightLogOpen ? 'bottom-[46vh] md:bottom-0 md:right-96' : 'bottom-0 md:right-0'}
         `}
       >
         {/* Flight Log Trigger Button */}
@@ -821,7 +821,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         </button>
 
         {/* Globe - shifted up to account for bottom HUD */}
-        <div ref={containerRef} className="absolute inset-0" style={{ transform: 'translateY(-10%)' }}>
+        <div ref={containerRef} className="absolute inset-0" style={{ transform: 'translateY(-2.5%)' }}>
         {GlobeComponent && (
           <GlobeComponent
             ref={globeRef}
@@ -859,7 +859,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         className="absolute bottom-0 left-0 right-0 z-[1000] font-mono px-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8"
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
         }}
       >
         {currentStop && !flightLogOpen && (
