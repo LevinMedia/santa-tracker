@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
@@ -275,6 +275,7 @@ const COMMAND_OPTIONS: CommandOption[] = [
 
 export default function Home() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [entries, setEntries] = useState<TerminalEntry[]>([])
   const [showPrompt, setShowPrompt] = useState(false)
   const [cursorVisible, setCursorVisible] = useState(true)
@@ -331,9 +332,15 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [getNextChristmas])
 
-  // Check if Santa is currently live (within flight window)
+  // Check if Santa is currently live (within flight window or forced via URL param)
   useEffect(() => {
+    const forceLive = searchParams.get('forceLive') === 'true'
+    
     const checkLiveStatus = () => {
+      if (forceLive) {
+        setIsSantaLive(true)
+        return
+      }
       const now = Date.now()
       const isLive = now >= FLIGHT_START && now <= FLIGHT_END
       setIsSantaLive(isLive)
@@ -342,7 +349,7 @@ export default function Home() {
     checkLiveStatus()
     const interval = setInterval(checkLiveStatus, 10000) // Check every 10 seconds
     return () => clearInterval(interval)
-  }, [])
+  }, [searchParams])
 
   const persistEntries = useCallback((nextEntries: TerminalEntry[]) => {
     if (typeof window === 'undefined') return
@@ -1141,7 +1148,7 @@ export default function Home() {
               return (
                 <div key={entry.id} className="min-h-[1.5em]">
                   {isSantaLive 
-                    ? "    IT'S SANTA TIME LET'S GOOOOO 🎅🎄🎁"
+                    ? <>{"    IT'S SANTA TIME LET'S GOOOOO "}<span style={{ textShadow: 'none' }}>🎅🎄🎁</span></>
                     : `    COUNTDOWN TO SANTA TIME .. ${String(countdown.days).padStart(2, '0')}D ${String(countdown.hours).padStart(2, '0')}H ${String(countdown.minutes).padStart(2, '0')}M ${String(countdown.seconds).padStart(2, '0')}S`
                   }
                 </div>
