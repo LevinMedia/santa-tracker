@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
+import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 
 const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are dected at or around the north pole on December 25th, 2025. Check back then! As you celebrate this season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
@@ -267,11 +268,8 @@ const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
 
-// Live flight configuration
-const LIVE_FLIGHT_FILE = '2025_santa_tracker'
-// Flight window: Dec 2, 10:00 UTC to Dec 4, 12:00 UTC (for testing - would be Dec 24-26 in production)
-const LIVE_FLIGHT_START_UTC = new Date('2025-12-02T10:00:00Z').getTime()
-const LIVE_FLIGHT_END_UTC = new Date('2025-12-04T12:00:00Z').getTime()
+// Live flight configuration - imported from build-time generated constants
+// See: scripts/generate-flight-window.ts
 
 export default function Home() {
   const router = useRouter()
@@ -335,7 +333,7 @@ export default function Home() {
   useEffect(() => {
     const checkLiveStatus = () => {
       const now = Date.now()
-      const isLive = now >= LIVE_FLIGHT_START_UTC && now <= LIVE_FLIGHT_END_UTC
+      const isLive = now >= FLIGHT_START && now <= FLIGHT_END
       setIsSantaLive(isLive)
     }
     

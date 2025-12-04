@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "tsx scripts/generate-flight-window.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "generate:flight-window": "tsx scripts/generate-flight-window.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
