@@ -164,6 +164,9 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   const fetchedTimezonesRef = useRef<Set<number>>(new Set())
   const [weatherFetchStatus, setWeatherFetchStatus] = useState<string>('')
   
+  // Camera tracking state - when false, user has manually rotated globe
+  const [isCameraTracking, setIsCameraTracking] = useState(true)
+  
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
   const playStartSimTime = useRef<number>(0)
@@ -219,7 +222,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     }
   }, [globeReady, initialized])
 
-  // Ensure no autorotation while initializing
+  // Ensure no autorotation while initializing + detect user interaction
   useEffect(() => {
     if (!globeReady || !globeRef.current) return
 
@@ -228,8 +231,22 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
       controls.autoRotate = false
       controls.autoRotateSpeed = 0
       controls.update?.()
+      
+      // Detect when user manually rotates/drags the globe
+      const handleUserInteraction = () => {
+        // Only detach if we're playing or in live mode
+        if (isPlaying || isLive) {
+          setIsCameraTracking(false)
+        }
+      }
+      
+      controls.addEventListener('start', handleUserInteraction)
+      
+      return () => {
+        controls.removeEventListener('start', handleUserInteraction)
+      }
     }
-  }, [globeReady])
+  }, [globeReady, isPlaying, isLive])
 
   // Load flight data in background
   useEffect(() => {
@@ -574,7 +591,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
 
   // Track the animated edge tip (or current stop when paused)
   // Only update lat/lng - let user control zoom freely
+  // Camera tracking - follow current position or arc tip during playback
   useEffect(() => {
+    // Skip camera tracking if user has manually rotated the globe
+    if (!isCameraTracking) return
     if (!globeRef.current || !globeReady || !stops[currentIndex]) return
     
     const currentStop = stops[currentIndex]
@@ -604,7 +624,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
       { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? defaultCameraAltitude },
       isAnimating ? 0 : 300  // No animation during playback/live to avoid zoom fighting
     )
-  }, [currentIndex, stops, globeReady, isPlaying, travelProgress, isLive, isFollowingLive])
+  }, [currentIndex, stops, globeReady, isPlaying, travelProgress, isLive, isFollowingLive, isCameraTracking])
 
   // Track altitude changes from user zooming
   const lastAltitudeRef = useRef(cameraAltitude)
@@ -860,8 +880,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     
     // Convert to fraction of half-globe (0-1 for 0-180°)
     const distFraction = angularDist / Math.PI
-    // Scale altitude: short hops = 0.05, half-globe = 0.6
-    return 0.05 + distFraction * 0.55
+    // Scale altitude: short hops = 0.02 (flatter), half-globe = 0.6
+    return 0.02 + distFraction * 0.58
   }, [])
 
   const arcsData = useMemo(() => {
@@ -1031,6 +1051,32 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
             <div className="text-sm md:text-base font-semibold uppercase">
               {currentStop.city}, {currentStop.country}
             </div>
+          </div>
+        )}
+
+        {/* Re-center button when camera is detached */}
+        {!isCameraTracking && (isPlaying || isLive) && (
+          <div className="py-2 flex justify-start">
+            <button
+              onClick={() => setIsCameraTracking(true)}
+              className="flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black"
+              style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 10l-4 4m0 0l-4-4m4 4V3m0 18a9 9 0 110-18 9 9 0 010 18z"
+                />
+              </svg>
+              RE-CENTER
+            </button>
           </div>
         )}
 
