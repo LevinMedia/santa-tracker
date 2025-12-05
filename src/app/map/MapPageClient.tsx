@@ -15,14 +15,7 @@ const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
         textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
       }}
     >
-      <div className="text-sm space-y-1">
-        <div className="text-[#33ff33] animate-pulse">Accessing NORAD mainframe...</div>
-        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.2s' }}>连接中国卫星网络...</div>
-        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.4s' }}>Подключение к российской системе...</div>
-        <div className="text-[#33ff33] animate-pulse" style={{ animationDelay: '0.6s' }}>Bypassing security protocols...</div>
-        <div className="mt-4 text-[#33ff33]/60">SYSTEM STATUS........ STANDBY</div>
-        <div className="text-[#33ff33]/60">SANTA ACTIVITY....... NOT DETECTED</div>
-      </div>
+      <div className="text-sm text-[#33ff33] animate-pulse">Establishing satellite connections...</div>
     </div>
   ),
 })
