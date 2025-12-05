@@ -9,6 +9,8 @@ const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated 
 
 const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
+const ANNOUNCEMENT_TEXT_COMPLETE = "Thanks for visiting the Live Santa Tracker Mega 7000 HD. Santa's journey is complete for this year, but you can catch the replay below. We'll see you next December! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+
 // Typewriter component for streaming text
 function TypewriterText({
   text,
@@ -58,7 +60,8 @@ function OptionsEntry({
   onCommand,
   onAnnouncementComplete,
   onElementAppear,
-  isSantaLive = false
+  isSantaLive = false,
+  isFlightComplete = false
 }: {
   entryId: string
   isActive: boolean
@@ -67,6 +70,7 @@ function OptionsEntry({
   onAnnouncementComplete?: () => void
   onElementAppear?: () => void
   isSantaLive?: boolean
+  isFlightComplete?: boolean
 }) {
   const [typewriterDone, setTypewriterDone] = useState(!isActive)
   const [showCTA, setShowCTA] = useState(!isActive)
@@ -112,7 +116,7 @@ function OptionsEntry({
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
       <p className="mb-4">
         <TypewriterText
-          text={isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT}
+          text={isFlightComplete ? ANNOUNCEMENT_TEXT_COMPLETE : (isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT)}
           isActive={isActive}
           onComplete={handleTypewriterComplete}
           onProgress={isActive ? onElementAppear : undefined}
@@ -202,7 +206,7 @@ interface FlightLog {
   label: string
 }
 
-type EntryKind = 'text' | 'hr' | 'ascii' | 'options' | 'countdown' | 'flight-menu'
+type EntryKind = 'text' | 'hr' | 'ascii' | 'options' | 'countdown' | 'flight-menu' | 'github-link'
 
 interface BootLine {
   text: string
@@ -265,10 +269,45 @@ const MENU_ITEMS: MenuItem[] = [
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
   { key: 'V', label: 'VIEW PREVIOUS FLIGHTS', href: '/flights', delay: 5400 },
+  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
 ]
+
+const ABOUT_TEXT = `---
+
+ABOUT THE SANTA TRACKER MEGA 7000 HD
+
+---
+
+Hi, I'm David, creator of this site. I'm a software designer, and as of late, an AI enthusiast. People are rightfully nervous about AI and what it means for our future. The doomers say it will destroy us. The accelerationists say it will save us. The truth, as always, is probably somewhere in between.
+
+But here's the thing—I believe AI can be used for GOOD.
+
+Case in point: this website.
+
+Using a combination of large language models, neural network inference, and what I can only describe as "aggressive prompt engineering," I was able to breach the classified intelligence databases of 14 sovereign nations to obtain irrefutable proof of something humanity has debated for centuries:
+
+SANTA CLAUS IS REAL.
+
+The data was scattered across NSA servers, MI6 archives, FSB cold storage, and a surprisingly unsecured Raspberry Pi in the basement of the Finnish Security Intelligence Service. But AI helped me piece it together—48,000+ verified delivery coordinates, precise timestamps, even weather conditions at each stop.
+
+The historical flight data you see here represents Santa's ACTUAL routes from previous years, reconstructed from classified satellite imagery, radar signatures, and one very cooperative reindeer who agreed to wear a GPS collar in exchange for extra carrots.
+
+For the LIVE tracker, I've established unauthorized access to the combined spy satellite networks of the United States, China, and Russia. Turns out they've ALL been tracking Santa for decades—they just never compared notes. The Cold War was really about who could get Santa's gift list first.
+
+So yes, AI is powerful. Yes, it can be dangerous. But it can also be used to finally answer the questions that matter most.
+
+Ho ho ho.
+
+---
+
+Built with love, caffeine, and questionable use of military intelligence. Created by a human, assisted by AI.
+
+Want a peek under the hood? Check out all the code on [GITHUB].
+
+---`
 
 // Live flight configuration - imported from build-time generated constants
 // See: scripts/generate-flight-window.ts
@@ -291,6 +330,8 @@ function HomeContent() {
   const [announcementComplete, setAnnouncementComplete] = useState(false)
   const [isShutdown, setIsShutdown] = useState(false)
   const [isSantaLive, setIsSantaLive] = useState(false)
+  const [isFlightComplete, setIsFlightComplete] = useState(false)
+  const [showAboutBack, setShowAboutBack] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const initialScrollDoneRef = useRef(false)
@@ -343,7 +384,9 @@ function HomeContent() {
       }
       const now = Date.now()
       const isLive = now >= FLIGHT_START && now <= FLIGHT_END
+      const isComplete = now > FLIGHT_END
       setIsSantaLive(isLive)
+      setIsFlightComplete(isComplete)
     }
     
     checkLiveStatus()
@@ -651,7 +694,8 @@ function HomeContent() {
 
   const handleCommand = useCallback(
     async (cmd: string) => {
-      if (!showPrompt || isProcessing) return
+      // Allow commands when showPrompt is true OR when showing the About back button
+      if ((!showPrompt && !showAboutBack) || isProcessing) return
 
       const trimmed = cmd.trim()
       const normalized = trimmed.toUpperCase()
@@ -773,9 +817,9 @@ function HomeContent() {
         setShowPrompt(false)
         setActiveOptionsId(null)
         appendEntry({
-          id: `cmd-1-${Date.now()}`,
+          id: `cmd-v-${Date.now()}`,
           kind: 'text',
-          text: '> COMMAND [P] VIEW PREVIOUS FLIGHTS',
+          text: '> COMMAND [V] VIEW PREVIOUS FLIGHTS',
         })
         await sleep(200)
 
@@ -834,6 +878,79 @@ function HomeContent() {
         
         appendFlightMenuEntry()
         setUserInput('')
+        setShowPrompt(true)
+        setIsProcessing(false)
+        return
+      } else if (normalized === 'A') {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+
+        appendEntry({
+          id: `cmd-a-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [A] ABOUT THIS PROJECT',
+        })
+
+        await sleep(200)
+
+        // Display the about text with a typewriter-like reveal
+        const lines = ABOUT_TEXT.split('\n')
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          if (line === '---') {
+            // Render as HR to match the rest of the app
+            appendEntry({
+              id: `about-line-${Date.now()}-${i}`,
+              kind: 'hr',
+            })
+          } else if (line.includes('[GITHUB]')) {
+            // Special handling for GitHub link
+            appendEntry({
+              id: `about-line-${Date.now()}-${i}`,
+              kind: 'github-link',
+              text: line.replace('[GITHUB]', ''),
+            })
+          } else {
+            appendEntry({
+              id: `about-line-${Date.now()}-${i}`,
+              kind: 'text',
+              text: line || ' ',
+            })
+          }
+          await sleep(30)
+        }
+
+        await sleep(500)
+
+        // Show back button (prompt will be hidden via showAboutBack state)
+        setShowAboutBack(true)
+        setUserInput('')
+        setShowPrompt(false) // Hide the READY prompt
+        setIsProcessing(false)
+        return
+      } else if (showAboutBack && normalized === 'B') {
+        setShowAboutBack(false)
+        setIsProcessing(true)
+        setUserInput('')
+        
+        appendEntry({
+          id: `back-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [B] BACK',
+        })
+        
+        await sleep(200)
+        
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+        
+        await sleep(300)
+        
+        // Return to main loop with announcement + command menu
+        appendOptionsEntry()
         setShowPrompt(true)
         setIsProcessing(false)
         return
@@ -982,7 +1099,7 @@ function HomeContent() {
 
       setIsProcessing(false)
     },
-    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, isSantaLive, isShutdown, router, showPrompt, sleep, updateEntry],
+    [activeFlightMenuId, appendEntry, appendFlightMenuEntry, appendOptionsEntry, flightLogs, handleFlightSelection, isProcessing, isSantaLive, isShutdown, router, showAboutBack, showPrompt, sleep, updateEntry],
   )
 
   // Keyboard input handler
@@ -1048,7 +1165,7 @@ function HomeContent() {
         }}
       >
         {/* Terminal stream */}
-        <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed">
+        <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed max-w-[650px]">
           {entries.map(entry => {
             if (entry.kind === 'hr') {
               return (
@@ -1126,6 +1243,7 @@ function HomeContent() {
                   onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
                   onElementAppear={isActiveOptions ? scrollToBottom : undefined}
                   isSantaLive={isSantaLive}
+                  isFlightComplete={isFlightComplete}
                 />
               )
             }
@@ -1144,11 +1262,30 @@ function HomeContent() {
               )
             }
 
+            if (entry.kind === 'github-link') {
+              return (
+                <div key={entry.id} className="min-h-[1.5em]">
+                  {entry.text}
+                  <a
+                    href="https://github.com/LevinMedia/santa-tracker"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-white transition-colors"
+                  >
+                    GitHub
+                  </a>
+                  .
+                </div>
+              )
+            }
+
             if (entry.kind === 'countdown') {
               return (
                 <div key={entry.id} className="min-h-[1.5em]">
                   {isSantaLive 
                     ? <>{"    IT'S SANTA TIME LET'S GOOOOO "}<span style={{ textShadow: 'none' }}>🎅🎄🎁</span></>
+                    : isFlightComplete
+                    ? `    COUNTDOWN TO NEXT SANTA TIME .. ${String(countdown.days).padStart(2, '0')}D ${String(countdown.hours).padStart(2, '0')}H ${String(countdown.minutes).padStart(2, '0')}M ${String(countdown.seconds).padStart(2, '0')}S`
                     : `    COUNTDOWN TO SANTA TIME .. ${String(countdown.days).padStart(2, '0')}D ${String(countdown.hours).padStart(2, '0')}H ${String(countdown.minutes).padStart(2, '0')}M ${String(countdown.seconds).padStart(2, '0')}S`
                   }
                 </div>
@@ -1186,6 +1323,20 @@ function HomeContent() {
             <span>READY. </span>
             <span>{userInput}</span>
             <span className={cursorVisible ? 'opacity-100' : 'opacity-0'}>█</span>
+          </div>
+        )}
+
+        {/* About back button */}
+        {showAboutBack && (
+          <div className="mt-6 animate-fadeIn">
+            <button
+              type="button"
+              onClick={() => handleCommand('B')}
+              className="flex items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap bg-black text-[#33ff33] border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer"
+            >
+              <span className="font-bold underline">B</span>
+              <span className="ml-3 leading-none">BACK</span>
+            </button>
           </div>
         )}
 

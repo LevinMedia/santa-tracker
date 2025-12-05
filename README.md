@@ -1,73 +1,42 @@
-# 🎅 Santa Tracker
+# 🎅 Santa Tracker Mega 7000 HD
 
-Real-time Santa tracking application built with Next.js, Tailwind CSS, Headless UI, and Mapbox.
+A real-time Santa tracking system utilizing... *alternative data sources*.
+
+## What Is This?
+
+This is a fully operational Santa tracking platform. It displays Santa's precise location on Christmas Eve, along with historical flight data from previous years.
+
+How do we know where Santa is? Let's just say we have our methods. The data speaks for itself: 48,000+ verified stops, weather conditions at each location, precise UTC timestamps. 
+
+You're welcome to look around.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Home — Santa status dashboard |
-| `/map` | Radar Map — Retro green radar-style world map |
+Open [http://localhost:3000](http://localhost:3000)
 
 ## Tech Stack
 
-- **Next.js 16** — React framework with App Router
-- **Tailwind CSS** — Utility-first styling
-- **Headless UI** — Accessible UI components
-- **Mapbox GL** — Radar map visualization
-- **Luxon** — Timezone handling
-- **tz-lookup** — Coordinate to timezone conversion
+Next.js • react-globe.gl • Tailwind CSS • Open-Meteo • TypeScript
 
 ## Project Structure
 
-```
-src/
-├── app/
-│   ├── layout.tsx      # Root layout
-│   ├── page.tsx        # Home page
-│   ├── map/
-│   │   └── page.tsx    # Radar map page
-│   └── globals.css     # Global styles
-├── lib/
-│   └── supabase/       # Supabase client utilities
+The interesting bits are in `src/components/GlobeMap.tsx` and `scripts/`. 
 
-public/
-├── worldcities.csv           # Raw city data (48k cities)
-├── worldcities-enriched.csv  # With timezone + offset
-└── worldcities-sorted.csv    # Sorted by timezone (48,066 cities)
+The CSV files in `public/` contain... well, you'll see.
 
-scripts/
-├── enrich-cities.ts          # Add timezone data
-├── sort-by-timezone.ts       # Sort east → west
-└── add-utc14-cities.ts       # Add Line Islands
-```
+## Contributing
 
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npx tsx scripts/enrich-cities.ts` | Process city data |
-
-## Documentation
-
-See [MASTER_PLAN.md](./MASTER_PLAN.md) for the full technical roadmap and implementation details.
+Built by a human, assisted by AI. PRs welcome.
 
 ## License
 
 MIT
+
+---
+
+*Ho ho ho.* 🎄
