@@ -143,11 +143,7 @@ export async function GET() {
     const response = await fetch(`${baseUrl}/api/weather/ensure`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        timezone: currentTz, 
-        dataFile: '2025_santa_tracker.csv',
-        year: 2025 
-      })
+      body: JSON.stringify({ timezone: currentTz })
     })
     const data = await response.json()
     results.push({ timezone: currentTz, status: data.status || 'error' })
@@ -162,11 +158,7 @@ export async function GET() {
       const response = await fetch(`${baseUrl}/api/weather/ensure`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          timezone: nextTz, 
-          dataFile: '2025_santa_tracker.csv',
-          year: 2025 
-        })
+        body: JSON.stringify({ timezone: nextTz })
       })
       const data = await response.json()
       results.push({ timezone: nextTz, status: data.status || 'error' })
