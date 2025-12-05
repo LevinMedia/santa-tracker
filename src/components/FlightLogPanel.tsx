@@ -422,22 +422,27 @@ export default function FlightLogPanel({
     touchEndX.current = null
   }, [nextStop, prevStop, navigateToStop])
 
-  // Format time for display (short version for list) - now includes date
+  // Format time for display - just use the UTC time from CSV directly
   const formatTimeWithDate = (utcTime: string) => {
     if (!utcTime) return '--:--'
-    try {
-      const date = new Date(utcTime.replace(' ', 'T') + 'Z')
-      if (isNaN(date.getTime())) return utcTime
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
-    } catch {
-      return utcTime
-    }
+    // utcTime is already in format "2025-12-05 00:00:00"
+    // Just format it nicely without any timezone conversion
+    const parts = utcTime.split(' ')
+    if (parts.length !== 2) return utcTime
+    
+    const [datePart, timePart] = parts
+    const [year, month, day] = datePart.split('-')
+    const [hour, minute] = timePart.split(':')
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthName = months[parseInt(month) - 1] || month
+    
+    // Convert to 12-hour format
+    const hourNum = parseInt(hour)
+    const hour12 = hourNum === 0 ? 12 : hourNum > 12 ? hourNum - 12 : hourNum
+    const ampm = hourNum < 12 ? 'AM' : 'PM'
+    
+    return `${monthName} ${parseInt(day)}, ${hour12}:${minute} ${ampm}`
   }
 
   // Format relative time (e.g., "2h 30m 15s ago" if < 24 hours, otherwise "2 days ago")
@@ -479,22 +484,29 @@ export default function FlightLogPanel({
     }
   }
 
-  // Format datetime for human-readable display (e.g., "December 25, 2024 12:00 AM")
+  // Format datetime for human-readable display (e.g., "December 25, 2024 at 12:00 AM")
+  // Uses the UTC time string directly from CSV without timezone conversion
   const formatDateTime = (dateTimeStr: string) => {
     if (!dateTimeStr) return 'N/A'
     try {
-      // Parse "2024-12-25 11:00:00" format
-      const date = new Date(dateTimeStr.replace(' ', 'T'))
-      if (isNaN(date.getTime())) return dateTimeStr
+      // dateTimeStr is in format "2024-12-25 11:00:00"
+      const parts = dateTimeStr.split(' ')
+      if (parts.length !== 2) return dateTimeStr
       
-      return date.toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      })
+      const [datePart, timePart] = parts
+      const [year, month, day] = datePart.split('-')
+      const [hour, minute] = timePart.split(':')
+      
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December']
+      const monthName = months[parseInt(month) - 1] || month
+      
+      // Convert to 12-hour format
+      const hourNum = parseInt(hour)
+      const hour12 = hourNum === 0 ? 12 : hourNum > 12 ? hourNum - 12 : hourNum
+      const ampm = hourNum < 12 ? 'AM' : 'PM'
+      
+      return `${monthName} ${parseInt(day)}, ${year} at ${hour12}:${minute} ${ampm}`
     } catch {
       return dateTimeStr
     }

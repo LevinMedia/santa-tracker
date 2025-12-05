@@ -455,17 +455,26 @@ async function main() {
   let stopNumber = 1
   
   // Use current date to make flight "live" now
-  // Calculate the date so that "now" is roughly in the middle of the flight
+  // For midnight local time to display correctly, firstTzMidnightUTC MUST be at 10:00 UTC
+  // (because midnight in UTC+14 = 10:00 UTC on the previous day)
   const now = new Date()
   
-  // Flight takes ~27 hours. To be "live" now, start the flight ~12 hours ago
-  // First stop in UTC+14 arrives at midnight local = 10:00 UTC that day
-  // So we want firstTzMidnightUTC to be about 12 hours before now
-  const hoursIntoFlight = 12 // Put us roughly in the middle
-  const firstTzMidnightUTC = new Date(now.getTime() - hoursIntoFlight * ONE_HOUR_MS)
+  // Find the most recent 10:00 UTC that puts us in the middle of the flight
+  // Flight takes ~27 hours, so 10:00 UTC + 27h = 13:00 UTC next day
+  const firstTzMidnightUTC = new Date(now)
+  firstTzMidnightUTC.setUTCMinutes(0, 0, 0)
+  firstTzMidnightUTC.setUTCHours(10) // Set to 10:00 UTC (midnight in UTC+14)
   
-  // Round to the nearest hour for cleaner timestamps
-  firstTzMidnightUTC.setMinutes(0, 0, 0)
+  // If this puts the flight entirely in the future, go back a day
+  // If this puts the flight entirely in the past, we're viewing history
+  const flightEndUTC = new Date(firstTzMidnightUTC.getTime() + 27 * ONE_HOUR_MS)
+  
+  if (firstTzMidnightUTC > now) {
+    // Flight hasn't started yet with today's 10:00 UTC, use yesterday's
+    firstTzMidnightUTC.setUTCDate(firstTzMidnightUTC.getUTCDate() - 1)
+  }
+  
+  const hoursIntoFlight = (now.getTime() - firstTzMidnightUTC.getTime()) / ONE_HOUR_MS
   
   // Calculate what "year" and "day" this corresponds to for the local time calculations
   const year = firstTzMidnightUTC.getUTCFullYear()
@@ -473,7 +482,7 @@ async function main() {
   const day = firstTzMidnightUTC.getUTCDate()
   const startHour = firstTzMidnightUTC.getUTCHours()
   
-  console.log(`   Flight window: Starting ${firstTzMidnightUTC.toISOString()} (${hoursIntoFlight}h ago)`)
+  console.log(`   Flight window: Starting ${firstTzMidnightUTC.toISOString()} (${hoursIntoFlight.toFixed(1)}h ago)`)
   
   // Calculate North Pole departure time:
   // Santa needs to travel from North Pole to first stop BEFORE midnight UTC+14
