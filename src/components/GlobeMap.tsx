@@ -630,7 +630,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     
     // Chase cam: camera looks at a point south of Santa
     // This puts Santa in the upper portion of frame, showing the globe's horizon above him
-    const cameraLatOffset = 30  // Higher = more of the globe's top curve visible
+    const cameraLatOffset = 20  // Higher = more of the globe's top curve visible
     const cameraLngOffset = 5  // Offset to the side for a better viewing angle
     const cameraLat = Math.max(targetLat - cameraLatOffset, -85)
     const cameraLng = targetLng + cameraLngOffset
