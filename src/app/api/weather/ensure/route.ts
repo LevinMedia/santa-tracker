@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { put, head } from '@vercel/blob'
+import { put, list } from '@vercel/blob'
 import fs from 'fs'
 import path from 'path'
 
@@ -161,20 +161,20 @@ export async function POST(request: NextRequest) {
     
     const blobPath = getBlobPath(year, timezone)
     
-    // Check if blob already exists
+    // Check if blob already exists using list()
     try {
-      const blobInfo = await head(blobPath)
-      if (blobInfo) {
+      const { blobs } = await list({ prefix: blobPath })
+      if (blobs.length > 0) {
         console.log(`⏭️ Timezone UTC${timezone >= 0 ? '+' : ''}${timezone} already has blob`)
         return NextResponse.json({ 
           success: true, 
           status: 'already_complete',
-          blobUrl: blobInfo.url,
+          blobUrl: blobs[0].url,
           message: `Weather for UTC${timezone >= 0 ? '+' : ''}${timezone} already fetched`
         })
       }
-    } catch {
-      // Blob doesn't exist, continue to fetch
+    } catch (listError) {
+      console.log('Blob list check failed, continuing to fetch:', listError)
     }
     
     // In-memory lock to prevent concurrent fetches in same instance
@@ -183,12 +183,12 @@ export async function POST(request: NextRequest) {
       await delay(2000)
       // Check again if blob was created
       try {
-        const blobInfo = await head(blobPath)
-        if (blobInfo) {
+        const { blobs } = await list({ prefix: blobPath })
+        if (blobs.length > 0) {
           return NextResponse.json({ 
             success: true, 
             status: 'completed_by_other',
-            blobUrl: blobInfo.url,
+            blobUrl: blobs[0].url,
             message: `Weather for UTC${timezone >= 0 ? '+' : ''}${timezone} was fetched by another request`
           })
         }
