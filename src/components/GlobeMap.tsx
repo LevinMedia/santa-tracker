@@ -147,7 +147,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
   const [globeReady, setGlobeReady] = useState(false)
   const [GlobeComponent, setGlobeComponent] = useState<any>(null)
   const [currentSimTime, setCurrentSimTime] = useState<number>(0)
-  const defaultCameraAltitude = 1.7 // Slightly closer default zoom (~33% closer)
+  const defaultCameraAltitude = 1.6 // Zoom level
   const [cameraAltitude, setCameraAltitude] = useState<number>(defaultCameraAltitude)
   const [flightLogOpen, setFlightLogOpen] = useState(true)
   
@@ -256,7 +256,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
         controls.removeEventListener('start', handleUserInteraction)
       }
     }
-  }, [globeReady, isPlaying, isLive])
+  }, [globeReady, isPlaying, isLive, isCameraTracking])
 
   // Load flight data in background
   useEffect(() => {
@@ -628,10 +628,17 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
       targetLng = currentStop.lng
     }
     
-    // Only set lat/lng, preserve user's altitude/zoom
+    // Chase cam: camera looks at a point south of Santa
+    // This puts Santa in the upper portion of frame, showing the globe's horizon above him
+    const cameraLatOffset = 15  // Higher = more of the globe's top curve visible
+    const cameraLngOffset = 15  // Offset to the side for a better viewing angle
+    const cameraLat = Math.max(targetLat - cameraLatOffset, -85)
+    const cameraLng = targetLng + cameraLngOffset
+    
+    // Preserve user's altitude/zoom
     const currentPov = globeRef.current.pointOfView()
     globeRef.current.pointOfView(
-      { lat: targetLat, lng: targetLng, altitude: currentPov?.altitude ?? defaultCameraAltitude },
+      { lat: cameraLat, lng: cameraLng, altitude: currentPov?.altitude ?? defaultCameraAltitude },
       isAnimating ? 0 : 300  // No animation during playback/live to avoid zoom fighting
     )
   }, [currentIndex, stops, globeReady, isPlaying, travelProgress, isLive, isFollowingLive, isCameraTracking])
@@ -1089,7 +1096,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
             </button>
           </div>
         )}
-
+        
         <div className="text-[#33ff33]/60 text-xs border-t border-[#33ff33]/40" />
 
         <div className="py-2 flex flex-wrap items-center justify-between gap-3 text-[#33ff33] text-xs">
