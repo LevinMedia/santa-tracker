@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
+import Snowfall from '@/components/Snowfall'
 
 const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
 
@@ -1155,6 +1156,9 @@ function HomeContent() {
 
       {/* Flicker effect */}
       <div className="absolute inset-0 pointer-events-none z-10 animate-flicker opacity-[0.02] bg-white" />
+
+      {/* Snowfall effect */}
+      <Snowfall count={60} />
 
       {/* Main content */}
       <div
