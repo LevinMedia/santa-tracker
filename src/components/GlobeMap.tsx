@@ -222,6 +222,16 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv',
     }
   }, [globeReady, initialized])
 
+  // Default to closed flight log drawer on mobile in live mode
+  useEffect(() => {
+    if (!isLive) return
+
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    if (isMobile) {
+      setFlightLogOpen(false)
+    }
+  }, [isLive])
+
   // Ensure no autorotation while initializing + detect user interaction
   useEffect(() => {
     if (!globeReady || !globeRef.current) return
