@@ -58,6 +58,16 @@ export default function FlightLogPanel({
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   
+  // Backfilled weather for selected stop (when original is missing)
+  const [backfilledWeather, setBackfilledWeather] = useState<{
+    temperature_c?: number
+    weather_condition?: string
+    wind_speed_mps?: number
+    wind_direction_deg?: number
+    wind_gust_mps?: number
+  } | null>(null)
+  const [isBackfilling, setIsBackfilling] = useState(false)
+  
   // Track if we've entered replay mode (persists even when paused)
   const [inReplayMode, setInReplayMode] = useState(false)
   
@@ -98,6 +108,50 @@ export default function FlightLogPanel({
     setUseFreedomUnits(enabled)
     localStorage.setItem('useFreedomUnits', String(enabled))
   }
+  
+  // Sneaky backfill: fetch historical weather when viewing a stop without weather (live mode only)
+  useEffect(() => {
+    if (!isLive || !selectedStop) {
+      setBackfilledWeather(null)
+      return
+    }
+    
+    // Already has weather data
+    if (typeof selectedStop.temperature_c === 'number' && !isNaN(selectedStop.temperature_c)) {
+      setBackfilledWeather(null)
+      return
+    }
+    
+    // Backfill missing weather
+    const backfillWeather = async () => {
+      setIsBackfilling(true)
+      try {
+        const response = await fetch('/api/weather/backfill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stop_number: selectedStop.stop_number,
+            lat: selectedStop.lat,
+            lng: selectedStop.lng,
+            utc_time: selectedStop.utc_time,
+          })
+        })
+        
+        const data = await response.json()
+        
+        if (data.success && data.weather) {
+          setBackfilledWeather(data.weather)
+          console.log(`🌤️ Backfilled weather for ${selectedStop.city}: ${data.weather.temperature_c}°C`)
+        }
+      } catch (error) {
+        console.error('Error backfilling weather:', error)
+      } finally {
+        setIsBackfilling(false)
+      }
+    }
+    
+    backfillWeather()
+  }, [isLive, selectedStop])
   
   // Unit conversion functions
   const celsiusToFahrenheit = (c: number) => (c * 9/5) + 32
@@ -805,54 +859,72 @@ export default function FlightLogPanel({
                     </Switch>
                   </label>
                 </div>
-                {(typeof selectedStop.temperature_c === 'number' && !isNaN(selectedStop.temperature_c)) || selectedStop.weather_condition ? (
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Temperature</div>
-                      <div className="text-lg">
-                        {typeof selectedStop.temperature_c === 'number' && !isNaN(selectedStop.temperature_c) 
-                          ? useFreedomUnits
-                            ? `${celsiusToFahrenheit(selectedStop.temperature_c).toFixed(1)}°F`
-                            : `${selectedStop.temperature_c.toFixed(1)}°C`
-                          : 'N/A'}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Conditions</div>
-                      <div className="text-sm">{selectedStop.weather_condition || 'N/A'}</div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Speed</div>
-                      <div className="text-sm">
-                        {typeof selectedStop.wind_speed_mps === 'number' && !isNaN(selectedStop.wind_speed_mps)
-                          ? useFreedomUnits
-                            ? `${mpsToMph(selectedStop.wind_speed_mps).toFixed(1)} mph`
-                            : `${selectedStop.wind_speed_mps.toFixed(1)} m/s`
-                          : 'N/A'}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Direction</div>
-                      <div className="text-sm">
-                        {typeof selectedStop.wind_direction_deg === 'number' && !isNaN(selectedStop.wind_direction_deg)
-                          ? formatWindDirection(selectedStop.wind_direction_deg)
-                          : 'N/A'}
-                      </div>
-                    </div>
-                    {typeof selectedStop.wind_gust_mps === 'number' && !isNaN(selectedStop.wind_gust_mps) && (
+                {(() => {
+                  // Use backfilled weather as fallback
+                  const weather = {
+                    temperature_c: selectedStop.temperature_c ?? backfilledWeather?.temperature_c,
+                    weather_condition: selectedStop.weather_condition ?? backfilledWeather?.weather_condition,
+                    wind_speed_mps: selectedStop.wind_speed_mps ?? backfilledWeather?.wind_speed_mps,
+                    wind_direction_deg: selectedStop.wind_direction_deg ?? backfilledWeather?.wind_direction_deg,
+                    wind_gust_mps: selectedStop.wind_gust_mps ?? backfilledWeather?.wind_gust_mps,
+                  }
+                  const hasWeather = (typeof weather.temperature_c === 'number' && !isNaN(weather.temperature_c)) || weather.weather_condition
+                  
+                  if (isBackfilling) {
+                    return <div className="text-sm text-[#33ff33]/40 animate-pulse">Loading weather data...</div>
+                  }
+                  
+                  if (!hasWeather) {
+                    return <div className="text-sm text-[#33ff33]/40">No weather data available</div>
+                  }
+                  
+                  return (
+                    <div className="grid grid-cols-2 gap-3 text-xs">
                       <div className="space-y-1">
-                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Gusts</div>
-                        <div className="text-sm">
-                          {useFreedomUnits
-                            ? `${mpsToMph(selectedStop.wind_gust_mps).toFixed(1)} mph`
-                            : `${selectedStop.wind_gust_mps.toFixed(1)} m/s`}
+                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Temperature</div>
+                        <div className="text-lg">
+                          {typeof weather.temperature_c === 'number' && !isNaN(weather.temperature_c) 
+                            ? useFreedomUnits
+                              ? `${celsiusToFahrenheit(weather.temperature_c).toFixed(1)}°F`
+                              : `${weather.temperature_c.toFixed(1)}°C`
+                            : 'N/A'}
                         </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-[#33ff33]/40">No weather data available</div>
-                )}
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Conditions</div>
+                        <div className="text-sm">{weather.weather_condition || 'N/A'}</div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Speed</div>
+                        <div className="text-sm">
+                          {typeof weather.wind_speed_mps === 'number' && !isNaN(weather.wind_speed_mps)
+                            ? useFreedomUnits
+                              ? `${mpsToMph(weather.wind_speed_mps).toFixed(1)} mph`
+                              : `${weather.wind_speed_mps.toFixed(1)} m/s`
+                            : 'N/A'}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Direction</div>
+                        <div className="text-sm">
+                          {typeof weather.wind_direction_deg === 'number' && !isNaN(weather.wind_direction_deg)
+                            ? formatWindDirection(weather.wind_direction_deg)
+                            : 'N/A'}
+                        </div>
+                      </div>
+                      {typeof weather.wind_gust_mps === 'number' && !isNaN(weather.wind_gust_mps) && (
+                        <div className="space-y-1">
+                          <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/40">Wind Gusts</div>
+                          <div className="text-sm">
+                            {useFreedomUnits
+                              ? `${mpsToMph(weather.wind_gust_mps).toFixed(1)} mph`
+                              : `${weather.wind_gust_mps.toFixed(1)} m/s`}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 
