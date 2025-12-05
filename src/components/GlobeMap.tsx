@@ -165,6 +165,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   // Camera tracking state - when false, user has manually rotated globe
   const [isCameraTracking, setIsCameraTracking] = useState(true)
   
+  // Weather update version - increments when weather is updated to trigger re-renders
+  // without copying the entire stops array
+  const [weatherVersion, setWeatherVersion] = useState(0)
+  
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
   const playStartSimTime = useRef<number>(0)
@@ -242,10 +246,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       
       // Detect when user manually rotates/drags the globe
       const handleUserInteraction = () => {
-        // Only detach if we're playing or in live mode
-        if (isPlaying || isLive) {
-          setIsCameraTracking(false)
-        }
+        setIsCameraTracking(false)
       }
       
       controls.addEventListener('start', handleUserInteraction)
@@ -254,7 +255,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         controls.removeEventListener('start', handleUserInteraction)
       }
     }
-  }, [globeReady, isPlaying, isLive, isCameraTracking])
+  }, [globeReady])
 
   // Load flight data in background
   useEffect(() => {
@@ -420,22 +421,19 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         const data = await response.json()
         
         if (data.success && data.weather) {
-          // Update this stop with weather
-          setStops(prevStops => {
-            const newStops = [...prevStops]
-            const idx = newStops.findIndex(s => s.stop_number === currentStop.stop_number)
-            if (idx !== -1) {
-              newStops[idx] = {
-                ...newStops[idx],
-                temperature_c: data.weather.temperature_c,
-                weather_condition: data.weather.weather_condition,
-                wind_speed_mps: data.weather.wind_speed_mps,
-                wind_direction_deg: data.weather.wind_direction_deg,
-                wind_gust_mps: data.weather.wind_gust_mps ?? undefined,
-              }
-            }
-            return newStops
-          })
+          // Update this stop with weather - mutate in place to avoid copying 48K array
+          // We know the index (liveIndex) so no need to search
+          const stop = stops[liveIndex]
+          if (stop && stop.stop_number === currentStop.stop_number) {
+            // Mutate directly (stops array reference stays stable)
+            stop.temperature_c = data.weather.temperature_c
+            stop.weather_condition = data.weather.weather_condition
+            stop.wind_speed_mps = data.weather.wind_speed_mps
+            stop.wind_direction_deg = data.weather.wind_direction_deg
+            stop.wind_gust_mps = data.weather.wind_gust_mps ?? undefined
+            // Increment version to trigger re-renders for components that need weather
+            setWeatherVersion(v => v + 1)
+          }
           
           if (data.status === 'fetched') {
             console.log(`🌤️ Fetched weather for ${currentStop.city}: ${data.weather.temperature_c}°C`)
@@ -614,15 +612,19 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     if (!sunLight) {
       // Import THREE dynamically
       import('three').then(({ DirectionalLight, AmbientLight }) => {
+        // Check if component is still mounted and scene exists
+        const currentScene = globeRef.current?.scene()
+        if (!currentScene) return
+        
         // Add ambient light for base illumination
         const ambient = new AmbientLight(0x333333, 0.5)
         ambient.name = 'ambientLight'
-        scene.add(ambient)
+        currentScene.add(ambient)
         
         // Add directional light for sun
         const directional = new DirectionalLight(0xffffee, 1.5)
         directional.name = 'sunLight'
-        scene.add(directional)
+        currentScene.add(directional)
         
         // Position the sun
         const sunPos = getSunPosition(currentSimTime)
@@ -648,6 +650,41 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       )
     }
   }, [globeReady, currentSimTime])
+  
+  // Cleanup Three.js resources on unmount
+  useEffect(() => {
+    return () => {
+      // Cancel any pending animation frames
+      if (animationFrame.current) {
+        cancelAnimationFrame(animationFrame.current)
+      }
+      
+      // Cleanup Three.js scene objects
+      if (globeRef.current) {
+        const scene = globeRef.current.scene()
+        if (scene) {
+          // Remove and dispose lights
+          const sunLight = scene.getObjectByName('sunLight')
+          const ambientLight = scene.getObjectByName('ambientLight')
+          
+          if (sunLight) {
+            scene.remove(sunLight)
+            if ('dispose' in sunLight) (sunLight as any).dispose()
+          }
+          if (ambientLight) {
+            scene.remove(ambientLight)
+            if ('dispose' in ambientLight) (ambientLight as any).dispose()
+          }
+        }
+        
+        // Dispose globe renderer
+        const renderer = globeRef.current.renderer()
+        if (renderer) {
+          renderer.dispose()
+        }
+      }
+    }
+  }, [])
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value)
@@ -747,58 +784,56 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   // Scale current marker size based on zoom level (altitude)
   const currentMarkerSize = Math.max(0.1, Math.min(0.4, 0.4 * (cameraAltitude / 2)))
   
-  // Only show visited stops - limit to MAX_POINTS for performance
-  const MAX_POINTS = 1000
-  const FADE_ZONE = 200 // Points in this range will fade out
-  
+  // Only show last 3 stops - fades match arc fades
   const visitedPoints = useMemo(() => {
-    const totalVisited = currentIndex + 1
-    const startIndex = Math.max(0, totalVisited - MAX_POINTS)
-    const visibleStops = stops.slice(startIndex, totalVisited)
-    
-    // Determine if we're animating (traveling between stops)
     const isAnimating = isLive ? isFollowingLive : isPlaying
-    const progress = travelProgress
+    const progress = isAnimating ? travelProgress : 0
     
-    return visibleStops.map((stop, idx) => {
-      const isCurrentStop = stop.stop_number === currentStop?.stop_number
+    const points: Array<{ lat: number; lng: number; size: number; color: string }> = []
+    
+    // Point 1: Current stop - pops white when landing, fades to green over travel time
+    if (currentStop) {
+      const landingSize = currentMarkerSize * 2.5
+      const r = Math.round(255 - (255 - 51) * progress)  // 255 → 51
+      const g = 255  // stays at 255
+      const b = Math.round(255 - (255 - 51) * progress)  // 255 → 51
+      const size = landingSize - (landingSize - 0.08) * progress
       
-      // Calculate fade for oldest points in the window
-      let opacity = 1
-      if (totalVisited > MAX_POINTS && idx < FADE_ZONE) {
-        opacity = idx / FADE_ZONE // 0 at oldest, 1 at FADE_ZONE
+      points.push({
+        lat: currentStop.lat,
+        lng: currentStop.lng,
+        size,
+        color: `rgba(${r}, ${g}, ${b}, 1)`,
+      })
+    }
+    
+    // Point 2: Previous stop - fades 100% → 30% (matches Arc 2)
+    const prevStop = currentIndex > 0 ? stops[currentIndex - 1] : null
+    if (prevStop) {
+      const opacity2 = 1.0 - (0.7 * progress) // 1.0 → 0.3
+      points.push({
+        lat: prevStop.lat,
+        lng: prevStop.lng,
+        size: 0.08,
+        color: `rgba(51, 255, 51, ${opacity2})`,
+      })
+    }
+    
+    // Point 3: Second previous stop - fades 30% → 0% (matches Arc 3)
+    const prevStop2 = currentIndex > 1 ? stops[currentIndex - 2] : null
+    if (prevStop2) {
+      const opacity3 = 0.3 * (1 - progress) // 0.3 → 0
+      if (opacity3 > 0.01) {
+        points.push({
+          lat: prevStop2.lat,
+          lng: prevStop2.lng,
+          size: 0.08,
+          color: `rgba(51, 255, 51, ${opacity3})`,
+        })
       }
-      
-      // Current stop transitions as Santa travels to next stop:
-      // - Size: shrinks from currentMarkerSize to 0.08
-      // - Color: transitions from white to green
-      if (isCurrentStop && isAnimating && progress > 0) {
-        const targetSize = 0.08
-        const interpolatedSize = currentMarkerSize - (currentMarkerSize - targetSize) * progress
-        
-        // Interpolate color from white (255,255,255) to green (51,255,51)
-        const r = Math.round(255 - (255 - 51) * progress)
-        const g = 255 // stays at 255
-        const b = Math.round(255 - (255 - 51) * progress)
-        
-        return {
-          lat: stop.lat,
-          lng: stop.lng,
-          size: interpolatedSize,
-          color: `rgba(${r}, ${g}, ${b}, ${opacity})`,
-        }
-      }
-      
-      // Non-current stops or when paused
-      const baseColor = isCurrentStop ? '255, 255, 255' : '51, 255, 51'
-      
-      return {
-        lat: stop.lat,
-        lng: stop.lng,
-        size: isCurrentStop ? currentMarkerSize : 0.08,
-        color: `rgba(${baseColor}, ${opacity})`,
-      }
-    })
+    }
+    
+    return points
   }, [stops, currentIndex, currentStop, currentMarkerSize, travelProgress, isPlaying, isLive, isFollowingLive])
 
   
@@ -823,6 +858,18 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     return { lat: currentStop.lat, lng: currentStop.lng }
   }, [currentStop, nextStop, travelProgress, isPlaying, isLive, isFollowingLive])
   
+  
+  // Cached empty array for when not animating (avoid recreating empty array every frame)
+  const emptyArcsRef = useRef<Array<{
+    startLat: number
+    startLng: number
+    endLat: number
+    endLng: number
+    opacity: number
+    dashLength: number
+    altitude: number
+  }>>([])
+  
   // Calculate arc altitude based on distance
   const calcArcAltitude = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
     const phi1 = lat1 * Math.PI / 180
@@ -844,6 +891,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   }, [])
 
   const arcsData = useMemo(() => {
+    // Determine if we should show animated arcs
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const activeProgress = travelProgress
+    
+    // Return cached empty array when not animating at all
+    if (!isAnimating) {
+      return emptyArcsRef.current
+    }
+    
     const arcs: Array<{
       startLat: number
       startLng: number
@@ -854,12 +910,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       altitude: number
     }> = []
     
-    // Determine if we should show animated arcs
-    const isAnimating = isLive ? isFollowingLive : isPlaying
-    const activeProgress = travelProgress
-    
-    // Current arc (animating in) - swap start/end so dash draws from current toward next
-    if (isAnimating && currentStop && nextStop && activeProgress > 0) {
+    // Current arc (animating in) - only show when actually traveling
+    if (currentStop && nextStop && activeProgress > 0) {
       arcs.push({
         startLat: nextStop.lat,
         startLng: nextStop.lng,
@@ -871,49 +923,32 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       })
     }
     
-    // Fading arcs trail - 3 previous arcs that fade continuously based on progress
-    // As Santa travels to next stop, trails fade down. Arc 3 fully fades out by arrival.
-    
-    // Arc 1: Most recent - fades from 0.5 to 0.3
-    if (isAnimating && currentStop && prevStop) {
-      const opacity1 = 0.5 - (0.2 * activeProgress)
+    // Arc 2: Last completed leg - fades from 100% to 30% as Santa travels
+    if (currentStop && prevStop) {
+      const opacity2 = 1.0 - (0.7 * activeProgress) // 1.0 → 0.3
       arcs.push({
         startLat: currentStop.lat,
         startLng: currentStop.lng,
         endLat: prevStop.lat,
         endLng: prevStop.lng,
-        opacity: opacity1,
+        opacity: opacity2,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
       })
     }
     
-    // Arc 2: Second most recent - fades from 0.3 to 0.15
-    if (isAnimating && prevStop && prevStop2) {
-      const opacity2 = 0.3 - (0.15 * activeProgress)
-      arcs.push({
-        startLat: prevStop.lat,
-        startLng: prevStop.lng,
-        endLat: prevStop2.lat,
-        endLng: prevStop2.lng,
-        opacity: opacity2,
-        dashLength: 1,
-        altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
-      })
-    }
-    
-    // Arc 3: Third most recent - fades from 0.15 to 0 (fully gone on arrival)
-    if (isAnimating && prevStop2 && prevStop3) {
-      const opacity3 = 0.15 * (1 - activeProgress)
-      if (opacity3 > 0.01) { // Only render if visible
+    // Arc 3: Second to last leg - fades from 30% to 0% as Santa travels
+    if (prevStop && prevStop2) {
+      const opacity3 = 0.3 * (1 - activeProgress) // 0.3 → 0
+      if (opacity3 > 0.01) {
         arcs.push({
-          startLat: prevStop2.lat,
-          startLng: prevStop2.lng,
-          endLat: prevStop3.lat,
-          endLng: prevStop3.lng,
+          startLat: prevStop.lat,
+          startLng: prevStop.lng,
+          endLat: prevStop2.lat,
+          endLng: prevStop2.lng,
           opacity: opacity3,
           dashLength: 1,
-          altitude: calcArcAltitude(prevStop3.lat, prevStop3.lng, prevStop2.lat, prevStop2.lng),
+          altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
         })
       }
     }
@@ -992,6 +1027,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             onGlobeReady={() => setGlobeReady(true)}
           />
         )}
+        
       </div>
       
       {/* Scrubber Control Panel */}
@@ -1014,10 +1050,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         )}
 
         {/* Re-center button when camera is detached */}
-        {!isCameraTracking && (isPlaying || isLive) && (
+        {!isCameraTracking && (
           <div className="py-2 flex justify-start">
             <button
-              onClick={() => setIsCameraTracking(true)}
+              onClick={() => {
+                setIsCameraTracking(true)
+                // Reset zoom to default
+                if (globeRef.current) {
+                  const currentPov = globeRef.current.pointOfView()
+                  globeRef.current.pointOfView({ 
+                    lat: currentPov?.lat ?? 0, 
+                    lng: currentPov?.lng ?? 0, 
+                    altitude: defaultCameraAltitude 
+                  }, 300)
+                }
+              }}
               className="flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black"
               style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
             >
@@ -1188,7 +1235,6 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
       {/* Flight Log Panel - outside content wrapper so it doesn't get pushed */}
       <FlightLogPanel
-        key={flightLogOpen ? 'log-open' : 'log-closed'}
         isOpen={flightLogOpen}
         onClose={() => setFlightLogOpen(false)}
         stops={stops}
