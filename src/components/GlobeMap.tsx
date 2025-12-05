@@ -407,8 +407,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     const currentTz = currentStop.utc_offset_rounded
     const nextTz = getNextTimezone(stops, liveIndex)
     
-    // Call server to ensure weather is fetched for a timezone
-    // Server handles caching and prevents duplicate fetches across all visitors
+    // Call server to ensure weather is fetched for a timezone, then load from KV
     const ensureWeatherForTimezone = async (tzOffset: number) => {
       if (fetchedTimezonesRef.current.has(tzOffset)) return
       
@@ -416,59 +415,64 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       fetchedTimezonesRef.current.add(tzOffset)
       
       try {
-        const response = await fetch('/api/weather/ensure', {
+        // Step 1: Ensure weather is fetched and stored in KV
+        const ensureResponse = await fetch('/api/weather/ensure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             timezone: tzOffset,
-            dataFile: dataFile.replace(/^\//, '')
+            dataFile: dataFile.replace(/^\//, ''),
+            year: 2025
           })
         })
         
-        const data = await response.json()
+        const ensureData = await ensureResponse.json()
         
-        if (data.success) {
-          // If weather was just fetched, reload the CSV data to get updated weather
-          if (data.status === 'fetched') {
+        if (ensureData.success) {
+          console.log(`✅ ${ensureData.message}`)
+          
+          if (ensureData.status === 'fetched') {
             setWeatherFetchStatus(`Weather updated for UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
-            console.log(`✅ ${data.message} (${data.fetchedCount} stops)`)
-            
-            // Reload CSV to get the updated weather data
-            const csvResponse = await fetch(dataFile)
-            const csvText = await csvResponse.text()
-            const lines = csvText.split('\n').slice(1).filter(line => line.trim())
+          }
+          
+          // Step 2: Fetch weather data from Blob for this timezone
+          const weatherResponse = await fetch('/api/weather/get', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timezone: tzOffset, year: 2025 })
+          })
+          
+          const weatherData = await weatherResponse.json()
+          
+          if (weatherData.success && weatherData.weather) {
+            // Update stops with weather data from Blob
+            const tzStops = stops
+              .map((stop, idx) => ({ stop, idx }))
+              .filter(({ stop }) => stop.utc_offset_rounded === tzOffset)
             
             setStops(prevStops => {
               const newStops = [...prevStops]
-              lines.forEach((line, idx) => {
-                const values = parseCSVLine(line)
-                if (newStops[idx]) {
-                  // Update only weather fields
-                  const temp = values[11]
-                  const condition = values[12]
-                  const wind = values[13]
-                  const windDir = values[14]
-                  const gust = values[15]
-                  
-                  if (temp && temp !== '') {
-                    newStops[idx] = {
-                      ...newStops[idx],
-                      temperature_c: parseFloat(temp),
-                      weather_condition: condition || '',
-                      wind_speed_mps: wind ? parseFloat(wind) : undefined,
-                      wind_direction_deg: windDir ? parseFloat(windDir) : undefined,
-                      wind_gust_mps: gust ? parseFloat(gust) : undefined,
-                    }
+              tzStops.forEach(({ stop, idx }) => {
+                const weather = weatherData.weather[stop.stop_number]
+                if (weather) {
+                  newStops[idx] = {
+                    ...newStops[idx],
+                    temperature_c: weather.temperature_c,
+                    weather_condition: weather.weather_condition,
+                    wind_speed_mps: weather.wind_speed_mps,
+                    wind_direction_deg: weather.wind_direction_deg,
+                    wind_gust_mps: weather.wind_gust_mps,
                   }
                 }
               })
               return newStops
             })
             
-            setTimeout(() => setWeatherFetchStatus(''), 3000)
-          } else {
-            console.log(`⏭️ ${data.message}`)
+            const loadedCount = Object.keys(weatherData.weather).filter(k => weatherData.weather[k]).length
+            console.log(`🌤️ Loaded weather for ${loadedCount} stops in UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
           }
+          
+          setTimeout(() => setWeatherFetchStatus(''), 3000)
         }
       } catch (error) {
         console.error(`Error ensuring weather for UTC${tzOffset}:`, error)
