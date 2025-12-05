@@ -11,6 +11,10 @@
 
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 // Types
 interface City {
@@ -291,11 +295,15 @@ function formatDateTime(date: Date): string {
 
 // Main function
 async function main() {
-  const inputFile = path.join(__dirname, '../public/2025_santa_tracker.csv')
-  const outputFile = path.join(__dirname, '../public/2025_santa_tracker.csv')
+  // Get year from command line args (default: 2024)
+  const year = parseInt(process.argv[2]) || 2024
   
-  console.log('🎅 Santa Route Optimizer')
-  console.log('========================\n')
+  // Use 2024 as source file (has all the cities)
+  const inputFile = path.join(__dirname, '../public/2024_santa_tracker.csv')
+  const outputFile = path.join(__dirname, `../public/${year}_santa_tracker.csv`)
+  
+  console.log(`🎅 Santa Route Optimizer - Christmas ${year}`)
+  console.log('='.repeat(42) + '\n')
   
   // Read input file
   console.log('📖 Reading source data...')
@@ -450,39 +458,14 @@ async function main() {
   }
   
   // Generate timestamps
-  console.log('\n⏰ Generating timestamps...')
+  console.log(`\n⏰ Generating timestamps for Christmas ${year}...`)
   const fullRoute: RouteStop[] = []
   let stopNumber = 1
   
-  // Use current date to make flight "live" now
-  // For midnight local time to display correctly, firstTzMidnightUTC MUST be at 10:00 UTC
-  // (because midnight in UTC+14 = 10:00 UTC on the previous day)
-  const now = new Date()
+  // Fixed start: December 24 of the specified year at 10:00 UTC (midnight in UTC+14)
+  const firstTzMidnightUTC = new Date(Date.UTC(year, 11, 24, 10, 0, 0)) // Dec 24, [year] 10:00 UTC
   
-  // Find the most recent 10:00 UTC that puts us in the middle of the flight
-  // Flight takes ~27 hours, so 10:00 UTC + 27h = 13:00 UTC next day
-  const firstTzMidnightUTC = new Date(now)
-  firstTzMidnightUTC.setUTCMinutes(0, 0, 0)
-  firstTzMidnightUTC.setUTCHours(10) // Set to 10:00 UTC (midnight in UTC+14)
-  
-  // If this puts the flight entirely in the future, go back a day
-  // If this puts the flight entirely in the past, we're viewing history
-  const flightEndUTC = new Date(firstTzMidnightUTC.getTime() + 27 * ONE_HOUR_MS)
-  
-  if (firstTzMidnightUTC > now) {
-    // Flight hasn't started yet with today's 10:00 UTC, use yesterday's
-    firstTzMidnightUTC.setUTCDate(firstTzMidnightUTC.getUTCDate() - 1)
-  }
-  
-  const hoursIntoFlight = (now.getTime() - firstTzMidnightUTC.getTime()) / ONE_HOUR_MS
-  
-  // Calculate what "year" and "day" this corresponds to for the local time calculations
-  const year = firstTzMidnightUTC.getUTCFullYear()
-  const month = firstTzMidnightUTC.getUTCMonth()
-  const day = firstTzMidnightUTC.getUTCDate()
-  const startHour = firstTzMidnightUTC.getUTCHours()
-  
-  console.log(`   Flight window: Starting ${firstTzMidnightUTC.toISOString()} (${hoursIntoFlight.toFixed(1)}h ago)`)
+  console.log(`   Flight starts: ${firstTzMidnightUTC.toISOString()} (midnight UTC+14 on Dec 25)`)
   
   // Calculate North Pole departure time:
   // Santa needs to travel from North Pole to first stop BEFORE midnight UTC+14
@@ -625,6 +608,8 @@ async function main() {
   
   console.log('✅ Done!')
   console.log('   Run again for a different random route variation (perturbClusters shuffles nearby cities).')
+  console.log(`\n   Usage: npx ts-node scripts/generate-optimized-route.ts [year]`)
+  console.log(`   Example: npx ts-node scripts/generate-optimized-route.ts 2023`)
 }
 
 main().catch(console.error)

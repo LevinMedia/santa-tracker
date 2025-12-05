@@ -9,7 +9,10 @@
  * - wind_gust_mps (windgusts_10m, converted from km/h)
  *
  * Usage: 
- *   npx tsx scripts/add-weather-data.ts [--limit N]
+ *   npx tsx scripts/add-weather-data.ts <year> [--limit N]
+ *
+ * Arguments:
+ *   year         The year of the flight (e.g., 2023)
  *
  * Options:
  *   --limit N    Only process N location groups (for testing/batching)
@@ -34,21 +37,29 @@ config({ path: path.join(process.cwd(), ".env.local") });
 // Set this to your Professional plan API key, or leave undefined to use free tier
 const OPEN_METEO_API_KEY = process.env.OPEN_METEO_API_KEY;
 
-const INPUT_FILE = path.join(process.cwd(), "public/2024_santa_tracker.csv");
-const OUTPUT_FILE = path.join(
-  process.cwd(),
-  "public/2024_santa_tracker_weather.csv"
-);
+// Parse command line arguments
+const args = process.argv.slice(2);
+
+// Get year from first argument
+const yearArg = args.find(arg => /^\d{4}$/.test(arg));
+if (!yearArg) {
+  console.error('❌ Error: Year argument required');
+  console.error('   Usage: npx tsx scripts/add-weather-data.ts <year> [--limit N]');
+  console.error('   Example: npx tsx scripts/add-weather-data.ts 2023');
+  process.exit(1);
+}
+const YEAR = parseInt(yearArg, 10);
+
+// File paths based on year - updates file in place
+const DATA_FILE = path.join(process.cwd(), `public/${YEAR}_santa_tracker.csv`);
 const PROGRESS_FILE = path.join(
   process.cwd(),
-  "public/.weather_progress.json"
+  `public/.weather_progress_${YEAR}.json`
 );
 
 // Save progress every N groups
 const SAVE_PROGRESS_INTERVAL = 100;
 
-// Parse command line arguments
-const args = process.argv.slice(2);
 const limitIndex = args.indexOf('--limit');
 const BATCH_LIMIT = limitIndex !== -1 && args[limitIndex + 1] 
   ? parseInt(args[limitIndex + 1], 10) 
@@ -326,8 +337,8 @@ function groupStopsByLocation(
 }
 
 async function main() {
-  console.log("🎅 Santa Tracker Weather Enrichment Script");
-  console.log("==========================================\n");
+  console.log(`🎅 Santa Tracker Weather Enrichment - ${YEAR}`);
+  console.log("=".repeat(45) + "\n");
 
   if (IS_PAID_TIER) {
     console.log("🔑 Using paid API tier (unlimited daily requests)\n");
@@ -336,8 +347,14 @@ async function main() {
     console.log("   Set OPEN_METEO_API_KEY in .env.local for unlimited access\n");
   }
 
-  console.log("📖 Reading Santa tracker CSV...");
-  const csvContent = readFileSync(INPUT_FILE, "utf-8");
+  // Check if file exists
+  if (!existsSync(DATA_FILE)) {
+    console.error(`❌ Error: File not found: ${DATA_FILE}`);
+    process.exit(1);
+  }
+
+  console.log(`📖 Reading ${YEAR}_santa_tracker.csv...`);
+  const csvContent = readFileSync(DATA_FILE, "utf-8");
 
   console.log("🔄 Parsing CSV...");
   const stops: SantaStop[] = parse(csvContent, {
@@ -516,7 +533,7 @@ async function main() {
         "temperature_c", "weather_condition", "wind_speed_mps", "wind_direction_deg", "wind_gust_mps",
       ],
     });
-    writeFileSync(OUTPUT_FILE, csvOutput);
+    writeFileSync(DATA_FILE, csvOutput);
 
     const percentage = ((processed / groupArray.length) * 100).toFixed(1);
     const withWeatherCount = weatherData.filter((w) => w.temperature_c !== "").length;
@@ -545,7 +562,7 @@ async function main() {
   }
 
   console.log("\n✅ Done!");
-  console.log(`   📄 Output: ${OUTPUT_FILE}`);
+  console.log(`   📄 Output: ${DATA_FILE}`);
   console.log(`   📊 Total stops: ${stops.length}`);
   console.log(`   🌤️  Stops with weather data: ${withWeather}`);
   console.log(`   🌐 API calls made: ${apiCalls}`);

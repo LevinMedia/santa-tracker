@@ -135,7 +135,7 @@ function getSunPosition(timestamp: number): { lat: number; lng: number } {
   return { lat: declination, lng }
 }
 
-export default function GlobeMap({ dataFile = '/2024_santa_tracker_weather.csv', mode = 'replay' }: GlobeMapProps) {
+export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 'replay' }: GlobeMapProps) {
   const [stops, setStops] = useState<FlightStop[]>([])
   const [loading, setLoading] = useState(true)
   const [currentIndex, setCurrentIndex] = useState(0)
