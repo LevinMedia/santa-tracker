@@ -57,6 +57,24 @@ export async function POST(request: NextRequest) {
       })
     }
     
+    // Small random delay to reduce thundering herd (0-500ms)
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 500))
+    
+    // Double-check if another request already saved weather while we waited
+    const { data: recheck } = await supabase
+      .from('live_weather')
+      .select('temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
+      .eq('stop_number', stop_number)
+      .single()
+    
+    if (recheck?.temperature_c !== null && recheck?.temperature_c !== undefined) {
+      return NextResponse.json({ 
+        success: true, 
+        status: 'cached',
+        weather: recheck 
+      })
+    }
+    
     // Fetch weather from Open-Meteo
     const apiKeyParam = OPENMETEO_API_KEY ? `&apikey=${OPENMETEO_API_KEY}` : ''
     const url = `${API_BASE_URL}?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kmh${apiKeyParam}`
