@@ -19,6 +19,7 @@
     "@types/mapbox-gl": "^3.4.1",
     "@types/tz-lookup": "^6.1.2",
     "@vercel/analytics": "^1.6.0",
+    "@vercel/blob": "^2.0.0",
     "csv-parse": "^6.1.0",
     "csv-stringify": "^6.6.0",
     "dotenv": "^17.2.3",
