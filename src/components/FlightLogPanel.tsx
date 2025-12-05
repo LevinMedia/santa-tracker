@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Switch } from '@headlessui/react'
 
@@ -39,7 +39,8 @@ interface FlightLogPanelProps {
 // Number of items to load per batch
 const BATCH_SIZE = 50
 
-export default function FlightLogPanel({
+// Wrapped in memo to prevent re-renders when parent's travelProgress changes
+const FlightLogPanel = memo(function FlightLogPanel({
   isOpen,
   onClose,
   stops,
@@ -251,19 +252,17 @@ export default function FlightLogPanel({
   }, [currentIndex, stops.length])
 
   // Build the base list depending on mode
+  // Optimization: slice() already creates a copy, so we can reverse() in place
   const baseStops = useMemo(() => {
     if (isLive) {
       // Live mode: only show stops up to liveIndex (what has actually happened)
-      const visitedStops = stops.slice(0, liveIndex + 1)
-      return [...visitedStops].reverse() // Most recently visited at top
+      return stops.slice(0, liveIndex + 1).reverse() // Most recently visited at top
     } else if (inReplayMode) {
       // In replay mode: only show visited stops (0 to currentIndex), newest visited at top
-      // This creates a "live feed" effect - new stops appear at top, push older down
-      const visitedStops = stops.slice(0, currentIndex + 1)
-      return [...visitedStops].reverse() // Most recently visited at top
+      return stops.slice(0, currentIndex + 1).reverse() // Most recently visited at top
     } else {
       // Browsing: all stops, most recent (highest index) first
-      return [...stops].reverse()
+      return stops.slice().reverse()
     }
   }, [stops, currentIndex, inReplayMode, isLive, liveIndex])
 
@@ -972,5 +971,6 @@ export default function FlightLogPanel({
       )}
     </>
   )
-}
+})
 
+export default FlightLogPanel
