@@ -246,10 +246,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       
       // Detect when user manually rotates/drags the globe
       const handleUserInteraction = () => {
-        // Only detach if we're playing or in live mode
-        if (isPlaying || isLive) {
-          setIsCameraTracking(false)
-        }
+        setIsCameraTracking(false)
       }
       
       controls.addEventListener('start', handleUserInteraction)
@@ -258,7 +255,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         controls.removeEventListener('start', handleUserInteraction)
       }
     }
-  }, [globeReady, isPlaying, isLive, isCameraTracking])
+  }, [globeReady])
 
   // Load flight data in background
   useEffect(() => {
@@ -787,38 +784,57 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   // Scale current marker size based on zoom level (altitude)
   const currentMarkerSize = Math.max(0.1, Math.min(0.4, 0.4 * (cameraAltitude / 2)))
   
-  // Only show visited stops - limit to MAX_POINTS for performance
-  const MAX_POINTS = 1000
-  const FADE_ZONE = 200 // Points in this range will fade out
-  
+  // Only show last 3 stops - fades match arc fades
   const visitedPoints = useMemo(() => {
-    const totalVisited = currentIndex + 1
-    const startIndex = Math.max(0, totalVisited - MAX_POINTS)
-    const visibleStops = stops.slice(startIndex, totalVisited)
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    const progress = isAnimating ? travelProgress : 0
     
-    // NOTE: travelProgress intentionally NOT in deps to avoid recreating 1000 objects 10x/sec
-    // Current marker animation will be handled by a separate overlay (step 2)
+    const points: Array<{ lat: number; lng: number; size: number; color: string }> = []
     
-    return visibleStops.map((stop, idx) => {
-      const isCurrentStop = stop.stop_number === currentStop?.stop_number
+    // Point 1: Current stop - pops white when landing, fades to green over travel time
+    if (currentStop) {
+      const landingSize = currentMarkerSize * 2.5
+      const r = Math.round(255 - (255 - 51) * progress)  // 255 → 51
+      const g = 255  // stays at 255
+      const b = Math.round(255 - (255 - 51) * progress)  // 255 → 51
+      const size = landingSize - (landingSize - 0.08) * progress
       
-      // Calculate fade for oldest points in the window
-      let opacity = 1
-      if (totalVisited > MAX_POINTS && idx < FADE_ZONE) {
-        opacity = idx / FADE_ZONE // 0 at oldest, 1 at FADE_ZONE
+      points.push({
+        lat: currentStop.lat,
+        lng: currentStop.lng,
+        size,
+        color: `rgba(${r}, ${g}, ${b}, 1)`,
+      })
+    }
+    
+    // Point 2: Previous stop - fades 100% → 30% (matches Arc 2)
+    const prevStop = currentIndex > 0 ? stops[currentIndex - 1] : null
+    if (prevStop) {
+      const opacity2 = 1.0 - (0.7 * progress) // 1.0 → 0.3
+      points.push({
+        lat: prevStop.lat,
+        lng: prevStop.lng,
+        size: 0.08,
+        color: `rgba(51, 255, 51, ${opacity2})`,
+      })
+    }
+    
+    // Point 3: Second previous stop - fades 30% → 0% (matches Arc 3)
+    const prevStop2 = currentIndex > 1 ? stops[currentIndex - 2] : null
+    if (prevStop2) {
+      const opacity3 = 0.3 * (1 - progress) // 0.3 → 0
+      if (opacity3 > 0.01) {
+        points.push({
+          lat: prevStop2.lat,
+          lng: prevStop2.lng,
+          size: 0.08,
+          color: `rgba(51, 255, 51, ${opacity3})`,
+        })
       }
-      
-      // Current stop is white, others are green
-      const baseColor = isCurrentStop ? '255, 255, 255' : '51, 255, 51'
-      
-      return {
-        lat: stop.lat,
-        lng: stop.lng,
-        size: isCurrentStop ? currentMarkerSize : 0.08,
-        color: `rgba(${baseColor}, ${opacity})`,
-      }
-    })
-  }, [stops, currentIndex, currentStop, currentMarkerSize])
+    }
+    
+    return points
+  }, [stops, currentIndex, currentStop, currentMarkerSize, travelProgress, isPlaying, isLive, isFollowingLive])
 
   
   // Prepare arc data for travel animation (3D arcs through space)
@@ -879,8 +895,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     const isAnimating = isLive ? isFollowingLive : isPlaying
     const activeProgress = travelProgress
     
-    // Return cached empty array when not animating (avoid recreating empty array every frame)
-    if (!isAnimating || activeProgress === 0) {
+    // Return cached empty array when not animating at all
+    if (!isAnimating) {
       return emptyArcsRef.current
     }
     
@@ -894,7 +910,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       altitude: number
     }> = []
     
-    // Current arc (animating in) - swap start/end so dash draws from current toward next
+    // Current arc (animating in) - only show when actually traveling
     if (currentStop && nextStop && activeProgress > 0) {
       arcs.push({
         startLat: nextStop.lat,
@@ -907,49 +923,32 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       })
     }
     
-    // Fading arcs trail - 3 previous arcs that fade continuously based on progress
-    // As Santa travels to next stop, trails fade down. Arc 3 fully fades out by arrival.
-    
-    // Arc 1: Most recent - fades from 0.5 to 0.3
+    // Arc 2: Last completed leg - fades from 100% to 30% as Santa travels
     if (currentStop && prevStop) {
-      const opacity1 = 0.5 - (0.2 * activeProgress)
+      const opacity2 = 1.0 - (0.7 * activeProgress) // 1.0 → 0.3
       arcs.push({
         startLat: currentStop.lat,
         startLng: currentStop.lng,
         endLat: prevStop.lat,
         endLng: prevStop.lng,
-        opacity: opacity1,
+        opacity: opacity2,
         dashLength: 1,
         altitude: calcArcAltitude(prevStop.lat, prevStop.lng, currentStop.lat, currentStop.lng),
       })
     }
     
-    // Arc 2: Second most recent - fades from 0.3 to 0.15
+    // Arc 3: Second to last leg - fades from 30% to 0% as Santa travels
     if (prevStop && prevStop2) {
-      const opacity2 = 0.3 - (0.15 * activeProgress)
-      arcs.push({
-        startLat: prevStop.lat,
-        startLng: prevStop.lng,
-        endLat: prevStop2.lat,
-        endLng: prevStop2.lng,
-        opacity: opacity2,
-        dashLength: 1,
-        altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
-      })
-    }
-    
-    // Arc 3: Third most recent - fades from 0.15 to 0 (fully gone on arrival)
-    if (prevStop2 && prevStop3) {
-      const opacity3 = 0.15 * (1 - activeProgress)
-      if (opacity3 > 0.01) { // Only render if visible
+      const opacity3 = 0.3 * (1 - activeProgress) // 0.3 → 0
+      if (opacity3 > 0.01) {
         arcs.push({
-          startLat: prevStop2.lat,
-          startLng: prevStop2.lng,
-          endLat: prevStop3.lat,
-          endLng: prevStop3.lng,
+          startLat: prevStop.lat,
+          startLng: prevStop.lng,
+          endLat: prevStop2.lat,
+          endLng: prevStop2.lng,
           opacity: opacity3,
           dashLength: 1,
-          altitude: calcArcAltitude(prevStop3.lat, prevStop3.lng, prevStop2.lat, prevStop2.lng),
+          altitude: calcArcAltitude(prevStop2.lat, prevStop2.lng, prevStop.lat, prevStop.lng),
         })
       }
     }
@@ -1051,10 +1050,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         )}
 
         {/* Re-center button when camera is detached */}
-        {!isCameraTracking && (isPlaying || isLive) && (
+        {!isCameraTracking && (
           <div className="py-2 flex justify-start">
             <button
-              onClick={() => setIsCameraTracking(true)}
+              onClick={() => {
+                setIsCameraTracking(true)
+                // Reset zoom to default
+                if (globeRef.current) {
+                  const currentPov = globeRef.current.pointOfView()
+                  globeRef.current.pointOfView({ 
+                    lat: currentPov?.lat ?? 0, 
+                    lng: currentPov?.lng ?? 0, 
+                    altitude: defaultCameraAltitude 
+                  }, 300)
+                }
+              }}
               className="flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black"
               style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
             >
