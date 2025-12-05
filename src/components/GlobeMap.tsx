@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, startTransition } from 'react'
 import FlightLogPanel from './FlightLogPanel'
-import { getNextTimezone } from '@/lib/weather'
+// Weather utilities no longer needed - simplified to direct Supabase calls
 
 interface FlightStop {
   stop_number: number
@@ -160,9 +160,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const [isFollowingLive, setIsFollowingLive] = useState(mode === 'live')
   const isLive = mode === 'live'
   
-  // Weather fetching state (for live mode)
-  const fetchedTimezonesRef = useRef<Set<number>>(new Set())
-  const [weatherFetchStatus, setWeatherFetchStatus] = useState<string>('')
+  // Weather now fetched per-stop in real-time (live mode only)
   
   // Camera tracking state - when false, user has manually rotated globe
   const [isCameraTracking, setIsCameraTracking] = useState(true)
@@ -397,98 +395,59 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     return () => clearInterval(interval)
   }, [isLive, loading, stops, isFollowingLive, formatUTCTime])
 
-  // Live mode: Ensure weather is fetched for current and next timezone (server-side)
+  // Live mode: Fetch weather for current stop in real-time
   useEffect(() => {
     if (!isLive || loading || stops.length === 0) return
     
     const currentStop = stops[liveIndex]
-    if (!currentStop?.utc_offset_rounded) return
+    if (!currentStop) return
     
-    const currentTz = currentStop.utc_offset_rounded
-    const nextTz = getNextTimezone(stops, liveIndex)
+    // Skip if we already have weather for this stop
+    if (currentStop.temperature_c !== undefined) return
     
-    // Call server to ensure weather is fetched for a timezone, then load from KV
-    const ensureWeatherForTimezone = async (tzOffset: number) => {
-      if (fetchedTimezonesRef.current.has(tzOffset)) return
-      
-      // Mark as requested immediately to prevent duplicate requests from this client
-      fetchedTimezonesRef.current.add(tzOffset)
-      
+    const fetchWeatherForStop = async () => {
       try {
-        // Step 1: Ensure weather is fetched and stored in KV
-        const ensureResponse = await fetch('/api/weather/ensure', {
+        const response = await fetch('/api/weather/stop', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            timezone: tzOffset,
-            dataFile: dataFile.replace(/^\//, ''),
-            year: 2025
+            stop_number: currentStop.stop_number,
+            lat: currentStop.lat,
+            lng: currentStop.lng,
           })
         })
         
-        const ensureData = await ensureResponse.json()
+        const data = await response.json()
         
-        if (ensureData.success) {
-          console.log(`✅ ${ensureData.message}`)
-          
-          if (ensureData.status === 'fetched') {
-            setWeatherFetchStatus(`Weather updated for UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
-          }
-          
-          // Step 2: Fetch weather data from Blob for this timezone
-          const weatherResponse = await fetch('/api/weather/get', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ timezone: tzOffset, year: 2025 })
+        if (data.success && data.weather) {
+          // Update this stop with weather
+          setStops(prevStops => {
+            const newStops = [...prevStops]
+            const idx = newStops.findIndex(s => s.stop_number === currentStop.stop_number)
+            if (idx !== -1) {
+              newStops[idx] = {
+                ...newStops[idx],
+                temperature_c: data.weather.temperature_c,
+                weather_condition: data.weather.weather_condition,
+                wind_speed_mps: data.weather.wind_speed_mps,
+                wind_direction_deg: data.weather.wind_direction_deg,
+                wind_gust_mps: data.weather.wind_gust_mps ?? undefined,
+              }
+            }
+            return newStops
           })
           
-          const weatherData = await weatherResponse.json()
-          
-          if (weatherData.success && weatherData.weather) {
-            // Update stops with weather data from Blob
-            const tzStops = stops
-              .map((stop, idx) => ({ stop, idx }))
-              .filter(({ stop }) => stop.utc_offset_rounded === tzOffset)
-            
-            setStops(prevStops => {
-              const newStops = [...prevStops]
-              tzStops.forEach(({ stop, idx }) => {
-                const weather = weatherData.weather[stop.stop_number]
-                if (weather) {
-                  newStops[idx] = {
-                    ...newStops[idx],
-                    temperature_c: weather.temperature_c,
-                    weather_condition: weather.weather_condition,
-                    wind_speed_mps: weather.wind_speed_mps,
-                    wind_direction_deg: weather.wind_direction_deg,
-                    wind_gust_mps: weather.wind_gust_mps,
-                  }
-                }
-              })
-              return newStops
-            })
-            
-            const loadedCount = Object.keys(weatherData.weather).filter(k => weatherData.weather[k]).length
-            console.log(`🌤️ Loaded weather for ${loadedCount} stops in UTC${tzOffset >= 0 ? '+' : ''}${tzOffset}`)
+          if (data.status === 'fetched') {
+            console.log(`🌤️ Fetched weather for ${currentStop.city}: ${data.weather.temperature_c}°C`)
           }
-          
-          setTimeout(() => setWeatherFetchStatus(''), 3000)
         }
       } catch (error) {
-        console.error(`Error ensuring weather for UTC${tzOffset}:`, error)
-        // Remove from set so we can retry
-        fetchedTimezonesRef.current.delete(tzOffset)
+        console.error(`Error fetching weather for stop ${currentStop.stop_number}:`, error)
       }
     }
     
-    // Ensure weather for current timezone
-    ensureWeatherForTimezone(currentTz)
-    
-    // Pre-fetch next timezone if we know what it is
-    if (nextTz !== null) {
-      ensureWeatherForTimezone(nextTz)
-    }
-  }, [isLive, loading, stops, liveIndex, dataFile])
+    fetchWeatherForStop()
+  }, [isLive, loading, liveIndex, stops])
 
   // Real-time playback
   useEffect(() => {
@@ -1224,12 +1183,6 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             <span className="text-[#33ff33]">{elapsedDisplay}</span>
           </span>
         </div>
-        {isLive && weatherFetchStatus && (
-          <div className="pb-2 text-xs text-[#33ff33]/70 flex items-center gap-2">
-            <span className="animate-pulse">🌤️</span>
-            <span>{weatherFetchStatus}</span>
-          </div>
-        )}
       </div>
       </div>
 
