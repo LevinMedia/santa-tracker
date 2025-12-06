@@ -62,7 +62,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     
     // Create snowflake texture
     const rootStyles = getComputedStyle(document.documentElement)
-    const snowColor = rootStyles.getPropertyValue('--color-accent-green').trim() || '#165b33'
+    const snowColor = rootStyles.getPropertyValue('--color-accent-green').trim() || '#33ff33'
     const color = new THREE.Color(snowColor)
 
     const canvas = document.createElement('canvas')
