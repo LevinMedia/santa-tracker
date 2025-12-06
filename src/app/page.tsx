@@ -1134,7 +1134,9 @@ function HomeContent() {
       {/* Main content */}
       <div
         ref={containerRef}
-        className="relative z-0 w-full h-full overflow-auto p-4 sm:p-8 font-mono pb-16"
+        className={`relative z-0 w-full h-full p-4 sm:p-8 font-mono pb-16 ${
+          isShutdown ? 'overflow-hidden touch-none' : 'overflow-auto'
+        }`}
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.5), 0 0 20px rgba(51, 255, 51, 0.3)',
         }}
@@ -1315,8 +1317,8 @@ function HomeContent() {
           </div>
         )}
 
-        {/* Bottom padding for scroll */}
-        <div className="h-20" />
+        {/* Bottom padding for scroll (hidden during shutdown) */}
+        {!isShutdown && <div className="h-20" />}
       </div>
 
       {/* Status bar at bottom */}
