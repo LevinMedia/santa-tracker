@@ -89,7 +89,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     for (let i = 0; i < particleCount; i++) {
       const particle: Particle = {
         x: (Math.random() - 0.5) * window.innerWidth,
-        y: (Math.random() - 0.5) * window.innerHeight + window.innerHeight / 2,
+        y: window.innerHeight / 2 + Math.random() * window.innerHeight, // Start above the viewport
         z: Math.random() * 50,
         vx: 0,
         vy: -(Math.random() * 20 + 18), // Faster fall: 18-38 pixels per second
@@ -230,6 +230,11 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     let lastTime = performance.now()
     let animationId: number
     let time = 0
+
+    const warmupDelay = 0.6
+    const warmupDuration = 3.6
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
     
     const animate = () => {
       animationId = requestAnimationFrame(animate)
@@ -246,8 +251,16 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
       const positionAttr = geometry.getAttribute('position') as THREE.BufferAttribute
       const rotationZAttr = geometry.getAttribute('rotationZ') as THREE.BufferAttribute
       const rotationYAttr = geometry.getAttribute('rotationY') as THREE.BufferAttribute
-      
-      for (let i = 0; i < particleCount; i++) {
+
+      const warmupElapsed = Math.max(0, time - warmupDelay)
+      const warmupProgress = Math.min(1, warmupElapsed / warmupDuration)
+      const easedWarmup = easeInOutCubic(warmupProgress)
+      const activeCount = Math.floor(particleCount * easedWarmup)
+      const intensity = activeCount > 0 ? Math.max(0.15, easedWarmup) : 0
+
+      geometry.setDrawRange(0, activeCount)
+
+      for (let i = 0; i < activeCount; i++) {
         const particle = particles[i]
         
         // Only apply wind if mouse is actually moving
@@ -257,37 +270,38 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
           const dx = particle.x - mouse.x
           const dy = particle.y - mouse.y
           const dist = Math.sqrt(dx * dx + dy * dy)
-          
+
           // Wind force from mouse movement - MUCH more dramatic
           const windRadius = 250
           if (dist < windRadius) {
-            const force = Math.pow(1 - dist / windRadius, 2) * 2.5 // Quadratic falloff, 2.5x multiplier
+            const force = Math.pow(1 - dist / windRadius, 2) * 2.5 * intensity // Quadratic falloff, 2.5x multiplier
             particle.vx += mouse.vx * force * dt
             particle.vy += mouse.vy * force * dt
-            
+
             // Push away slightly from cursor too
             const pushForce = (1 - dist / windRadius) * 50
-            particle.vx += (dx / dist) * pushForce * dt
-            particle.vy += (dy / dist) * pushForce * dt
-            
+            particle.vx += (dx / dist) * pushForce * dt * intensity
+            particle.vy += (dy / dist) * pushForce * dt * intensity
+
             // Dramatically increase spin when disturbed
             particle.rotationSpeedZ += (Math.random() - 0.5) * force * 8
             particle.rotationSpeedY += (Math.random() - 0.5) * force * 12
           }
         }
-        
+
         // Natural wobble (gentle side-to-side drift)
-        particle.wobblePhase += particle.wobbleSpeed * dt
-        const wobbleForce = Math.sin(particle.wobblePhase) * 3
+        particle.wobblePhase += particle.wobbleSpeed * dt * intensity
+        const wobbleForce = Math.sin(particle.wobblePhase) * 3 * intensity
         particle.vx += wobbleForce * dt
         
         // Apply gentle drift back to falling straight
         particle.vx *= 0.985
         particle.vz *= 0.98
-        
+
         // Gravity (constant fall)
         const baseSpeed = 25 + (particle.size / 22) * 30
-        particle.vy += ((-baseSpeed) - particle.vy) * 0.02
+        const targetFallSpeed = (-baseSpeed) * (0.25 + intensity * 0.75)
+        particle.vy += (targetFallSpeed - particle.vy) * 0.02
         
         // Update position
         particle.x += particle.vx * dt
