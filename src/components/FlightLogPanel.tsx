@@ -58,6 +58,12 @@ const FlightLogPanel = memo(function FlightLogPanel({
   const [selectedStop, setSelectedStop] = useState<FlightStop | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // Mini globe state (mobile stop preview)
+  const [MiniGlobe, setMiniGlobe] = useState<any>(null)
+  const miniGlobeRef = useRef<HTMLDivElement>(null)
+  const miniGlobeInstance = useRef<any>(null)
+  const [miniGlobeSize, setMiniGlobeSize] = useState({ width: 0, height: 0 })
   
   // Backfilled weather for selected stop (when original is missing)
   const [backfilledWeather, setBackfilledWeather] = useState<{
@@ -94,6 +100,59 @@ const FlightLogPanel = memo(function FlightLogPanel({
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000)
     return () => clearInterval(interval)
+  }, [])
+
+  // Resize mini globe when the detail view opens
+  useEffect(() => {
+    if (!selectedStop || !miniGlobeRef.current) return
+
+    const rect = miniGlobeRef.current.getBoundingClientRect()
+    setMiniGlobeSize({ width: rect.width, height: rect.height })
+  }, [selectedStop])
+
+  // Disable interaction on the mini globe once it mounts
+  useEffect(() => {
+    if (!miniGlobeInstance.current) return
+
+    const controls = miniGlobeInstance.current.controls?.()
+    if (controls) {
+      controls.enableZoom = false
+      controls.enablePan = false
+      controls.enableRotate = false
+      controls.enableDamping = false
+    }
+  }, [MiniGlobe])
+
+  // Keep the selected stop centered in the mini globe view
+  useEffect(() => {
+    if (!selectedStop || !miniGlobeInstance.current) return
+
+    miniGlobeInstance.current.pointOfView({
+      lat: selectedStop.lat,
+      lng: selectedStop.lng,
+      altitude: 1.8,
+    }, 0)
+  }, [selectedStop])
+
+  // Lazy-load small globe for mobile detail view
+  useEffect(() => {
+    import('react-globe.gl').then((mod) => {
+      setMiniGlobe(() => mod.default)
+    })
+  }, [])
+
+  // Track mini globe container size
+  useEffect(() => {
+    const updateSize = () => {
+      if (miniGlobeRef.current) {
+        const rect = miniGlobeRef.current.getBoundingClientRect()
+        setMiniGlobeSize({ width: rect.width, height: rect.height })
+      }
+    }
+
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => window.removeEventListener('resize', updateSize)
   }, [])
   
   // Load freedom units preference from localStorage
@@ -783,7 +842,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           >
-            <div 
+            <div
               className={`flex items-center justify-between px-4 py-3 border-b border-[#33ff33]/40 bg-[#33ff33]/10 md:rounded-t-lg ${isDragging ? 'cursor-grabbing' : 'md:cursor-grab'}`}
               onMouseDown={handleDragStart}
             >
@@ -806,6 +865,40 @@ const FlightLogPanel = memo(function FlightLogPanel({
                 <span>Close</span>
               </button>
             </div>
+
+            {/* Mobile-only static globe preview */}
+            {selectedStop && (
+              <div className="md:hidden border-b border-[#33ff33]/20 bg-black/70" ref={miniGlobeRef}
+                style={{ height: '32vh', minHeight: '200px' }}
+              >
+                {MiniGlobe && miniGlobeSize.width > 0 && miniGlobeSize.height > 0 ? (
+                  <MiniGlobe
+                    ref={miniGlobeInstance}
+                    width={miniGlobeSize.width}
+                    height={miniGlobeSize.height}
+                    backgroundColor="rgba(0,0,0,0)"
+                    globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+                    showAtmosphere
+                    atmosphereColor="#33ff33"
+                    atmosphereAltitude={0.15}
+                    enablePointerInteraction={false}
+                    pointsData={[{ lat: selectedStop.lat, lng: selectedStop.lng }]}
+                    pointAltitude={0}
+                    pointColor={() => '#33ff33'}
+                    pointRadius={0.6}
+                    labelsData={[{ lat: selectedStop.lat, lng: selectedStop.lng, text: selectedStop.city }]}
+                    labelColor={() => 'rgba(51,255,51,0.8)'}
+                    labelDotRadius={0.6}
+                    labelSize={1.4}
+                    labelResolution={4}
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center text-[#33ff33]/40 text-xs">
+                    Loading globe view...
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="p-4 space-y-4 text-[#33ff33] flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3 text-xs">
