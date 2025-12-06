@@ -327,15 +327,24 @@ const FlightLogPanel = memo(function FlightLogPanel({
 
   // Filter by search query
   const filteredStops = useMemo(() => {
-    if (!searchQuery.trim()) return baseStops
+    const hasQuery = Boolean(searchQuery.trim())
+
+    // In replay mode, allow searching the entire route (not just visited stops)
+    // Live mode always limits searching to the visited portion (baseStops)
+    const searchPool = !isLive && inReplayMode && hasQuery
+      ? stops.slice().reverse() // Preserve newest-first ordering
+      : baseStops
+
+    if (!hasQuery) return searchPool
+
     const query = searchQuery.toLowerCase()
-    return baseStops.filter(
+    return searchPool.filter(
       (stop) =>
         stop.city.toLowerCase().includes(query) ||
         stop.country.toLowerCase().includes(query) ||
         stop.stop_number.toString().includes(query)
     )
-  }, [baseStops, searchQuery])
+  }, [baseStops, inReplayMode, isLive, searchQuery, stops])
 
   // Lazy load - scroll down for more
   const visibleStops = useMemo(() => {
