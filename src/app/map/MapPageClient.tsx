@@ -147,8 +147,7 @@ export default function MapPageClient({ flightParam, mode = 'replay' }: MapPageC
 
           {!isLiveMode && (
             <div className="pointer-events-auto flex items-center gap-4">
-              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-[#33ff33] text-black text-[10px] uppercase tracking-wider animate-pulse">
-                <span className="w-2 h-2 bg-white rounded-full" />
+              <span className="flex items-center px-2 py-0.5 bg-[#33ff33] text-black text-[10px] uppercase tracking-wider animate-pulse">
                 Replay
               </span>
             </div>
