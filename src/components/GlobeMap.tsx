@@ -76,6 +76,19 @@ function formatElapsedTime(ms: number): string {
   return `${hours}h ${minutes}m`
 }
 
+function formatEtaTime(ms: number): string {
+  if (ms <= 0) return 'ARRIVING NOW'
+
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  const minuteLabel = minutes === 1 ? 'MINUTE' : 'MINUTES'
+  const secondLabel = seconds === 1 ? 'SECOND' : 'SECONDS'
+
+  return `${minutes.toLocaleString()} ${minuteLabel} ${seconds.toString().padStart(2, '0')} ${secondLabel}`
+}
+
 function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const toRadians = (deg: number) => deg * Math.PI / 180
   const R = 6371 // Earth's radius in km
@@ -109,14 +122,18 @@ function calculateBearingDegrees(lat1: number, lng1: number, lat2: number, lng2:
 }
 
 function bearingToCompass(degrees: number): string {
-  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+  const directions = [
+    'NORTH', 'NORTH-NORTHEAST', 'NORTHEAST', 'EAST-NORTHEAST', 'EAST', 'EAST-SOUTHEAST',
+    'SOUTHEAST', 'SOUTH-SOUTHEAST', 'SOUTH', 'SOUTH-SOUTHWEST', 'SOUTHWEST', 'WEST-SOUTHWEST',
+    'WEST', 'WEST-NORTHWEST', 'NORTHWEST', 'NORTH-NORTHWEST'
+  ]
   const index = Math.round(degrees / 22.5) % 16
   return directions[index]
 }
 
 type StatusView = 'location' | 'speed' | 'heading' | 'next'
 
-const STATUS_ROTATE_INTERVAL_MS = 3000
+const STATUS_ROTATE_INTERVAL_MS = 5000
 const STATUS_FADE_DURATION_MS = 250
 const LONG_TRAVEL_DURATION_MS = 6 * 60 * 1000
 
@@ -200,6 +217,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const [hasInteractedWithReplay, setHasInteractedWithReplay] = useState(false)
   const [statusView, setStatusView] = useState<StatusView>('location')
   const [statusFading, setStatusFading] = useState(false)
+  const [showMph, setShowMph] = useState(false)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -227,6 +245,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const globeRef = useRef<any>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 })
+  const prevStatusViewRef = useRef<StatusView>('location')
+  const speedViewCountRef = useRef(0)
 
   // Mission timing
   const missionStart = stops.length > 0 ? stops[0].timestamp : 0
@@ -990,14 +1010,28 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     }
   }, [shouldCycleStatus])
 
-  const speedDisplay = legStats ? `${Math.round(legStats.speedKmh).toLocaleString()} km/h` : '--'
+  useEffect(() => {
+    const previousStatus = prevStatusViewRef.current
+
+    if (statusView === 'speed' && previousStatus !== 'speed' && shouldCycleStatus) {
+      const nextCount = speedViewCountRef.current + 1
+      speedViewCountRef.current = nextCount
+      setShowMph(nextCount % 2 === 0)
+    }
+
+    prevStatusViewRef.current = statusView
+  }, [statusView, shouldCycleStatus])
+
+  const speedDisplay = legStats
+    ? (showMph
+      ? `${Math.round(legStats.speedKmh * 0.621371).toLocaleString()} MPH`
+      : `${Math.round(legStats.speedKmh).toLocaleString()} KPH`)
+    : '--'
   const headingDisplay = legStats
     ? `${bearingToCompass(legStats.bearingDegrees)} (${Math.round(legStats.bearingDegrees)}°)`
     : '--'
   const projectedStop = nextStop ? `${nextStop.city}, ${nextStop.country}` : '--'
-  const etaDisplay = legStats
-    ? (legStats.etaMs > 0 ? formatElapsedTime(legStats.etaMs) : 'Arriving now')
-    : '--'
+  const etaDisplay = legStats ? formatEtaTime(legStats.etaMs) : '--'
   
   
   // Cached empty array for when not animating (avoid recreating empty array every frame)
@@ -1202,9 +1236,19 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
           }}
         >
-          {currentStop && (!flightLogOpen || isLive) && (
+          {currentStop && (
             <div
               className={`pb-3 text-center text-[#33ff33] transition-opacity duration-300 ${statusFading ? 'opacity-0' : 'opacity-100'}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => setFlightLogOpen(prev => !prev)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setFlightLogOpen(prev => !prev)
+                }
+              }}
+              style={{ cursor: 'pointer' }}
             >
               {statusView === 'location' && (
                 <>
