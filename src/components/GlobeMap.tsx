@@ -224,15 +224,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     }
   }, [globeReady, initialized])
 
-  // Default to closed flight log drawer on mobile in live mode
+  // Default to closed flight log drawer on mobile in live or replay mode
   useEffect(() => {
-    if (!isLive) return
-
     const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false
-    if (isMobile) {
+    if (isMobile && (mode === 'live' || mode === 'replay')) {
       setFlightLogOpen(false)
     }
-  }, [isLive])
+  }, [mode])
 
   // Ensure no autorotation while initializing + detect user interaction
   useEffect(() => {
