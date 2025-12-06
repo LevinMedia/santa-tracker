@@ -594,7 +594,10 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     if (isPlaying && stops.length > 0) {
       playStartTime.current = Date.now()
       playStartIndex.current = currentIndex
-      playStartSimTime.current = stops[currentIndex].timestamp
+
+      // Preserve current position (including mid-leg progress) when adjusting speed
+      const startSimTime = currentSimTime || stops[currentIndex].timestamp
+      playStartSimTime.current = startSimTime
     }
   }, [playSpeed])
 
