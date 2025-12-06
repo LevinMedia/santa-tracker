@@ -1202,7 +1202,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
           }}
         >
-          {currentStop && !flightLogOpen && (
+          {currentStop && (!flightLogOpen || isLive) && (
             <div
               className={`pb-3 text-center text-[#33ff33] transition-opacity duration-300 ${statusFading ? 'opacity-0' : 'opacity-100'}`}
             >
