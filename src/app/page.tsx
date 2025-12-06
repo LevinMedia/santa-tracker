@@ -269,6 +269,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
+  { key: '5', label: '2025 TRACKER REPLAY', href: '/map?flight=2025_santa_tracker&mode=replay', delay: 5300 },
   { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
   { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
@@ -847,6 +848,46 @@ function HomeContent() {
         await sleep(300)
 
         router.push('/map?flight=2024_santa_tracker&mode=replay')
+
+        appendOptionsEntry()
+        setUserInput('')
+        setShowPrompt(true)
+        setIsProcessing(false)
+        return
+      } else if (normalized === '5') {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+        appendEntry({
+          id: `cmd-5-${Date.now()}`,
+          kind: 'text',
+          text: '> COMMAND [5] 2025 TRACKER REPLAY',
+        })
+        await sleep(200)
+
+        const frames = ['/', '-', '\\', '|']
+        const loadingId = `loading-${Date.now()}`
+        appendEntry({
+          id: loadingId,
+          kind: 'text',
+          text: 'LOADING 2025 TRACKER REPLAY / ...',
+        })
+
+        for (let i = 0; i < 18; i++) {
+          updateEntry(loadingId, `LOADING 2025 TRACKER REPLAY ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+          await sleep(140)
+        }
+
+        appendEntry({
+          id: `found-logs-${Date.now()}`,
+          kind: 'text',
+          text: 'REPLAY READY. LAUNCHING 2025 MISSION...',
+          className: 'mb-10'
+        })
+
+        await sleep(300)
+
+        router.push('/map?flight=2025_santa_tracker&mode=replay')
 
         appendOptionsEntry()
         setUserInput('')
