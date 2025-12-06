@@ -22,7 +22,7 @@ interface Particle {
 export default function Snowfall({ count = 200 }: { count?: number }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -32,6 +32,13 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     
     const container = containerRef.current
     
+    // Determine snow visuals based on device
+    const isMobile = window.matchMedia('(max-width: 768px)').matches
+    const particleCount = isMobile ? Math.max(80, Math.floor(count * 0.6)) : count
+    const sizeRange = isMobile
+      ? { min: 6, max: 14 }
+      : { min: 8, max: 22 }
+
     // Scene setup
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(
@@ -54,13 +61,17 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     container.appendChild(renderer.domElement)
     
     // Create snowflake texture
+    const rootStyles = getComputedStyle(document.documentElement)
+    const snowColor = rootStyles.getPropertyValue('--color-accent-green').trim() || '#165b33'
+    const color = new THREE.Color(snowColor)
+
     const canvas = document.createElement('canvas')
     canvas.width = 64
     canvas.height = 64
     const ctx = canvas.getContext('2d')!
     
     // Draw a soft snowflake
-    ctx.fillStyle = 'white'
+    ctx.fillStyle = snowColor
     ctx.font = '48px serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -70,12 +81,12 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
     
     // Particle data
     const particles: Particle[] = []
-    const positions = new Float32Array(count * 3)
-    const sizes = new Float32Array(count)
-    const rotationsZ = new Float32Array(count)
-    const rotationsY = new Float32Array(count)
-    
-    for (let i = 0; i < count; i++) {
+    const positions = new Float32Array(particleCount * 3)
+    const sizes = new Float32Array(particleCount)
+    const rotationsZ = new Float32Array(particleCount)
+    const rotationsY = new Float32Array(particleCount)
+
+    for (let i = 0; i < particleCount; i++) {
       const particle: Particle = {
         x: (Math.random() - 0.5) * window.innerWidth,
         y: (Math.random() - 0.5) * window.innerHeight + window.innerHeight / 2,
@@ -83,7 +94,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
         vx: 0,
         vy: -(Math.random() * 20 + 18), // Faster fall: 18-38 pixels per second
         vz: 0,
-        size: Math.random() * 14 + 8,
+        size: Math.random() * (sizeRange.max - sizeRange.min) + sizeRange.min,
         rotationZ: Math.random() * Math.PI * 2,
         rotationY: Math.random() * Math.PI * 2,
         rotationSpeedZ: (Math.random() - 0.5) * 1.2 + (Math.random() > 0.5 ? 0.4 : -0.4), // Natural tumble
@@ -106,6 +117,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
       uniforms: {
         uTexture: { value: texture },
         uTime: { value: 0 },
+        uColor: { value: color },
       },
       vertexShader: `
         attribute float size;
@@ -114,7 +126,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
         varying float vRotationZ;
         varying float vScaleX;
         varying float vOpacity;
-        
+
         void main() {
           vRotationZ = rotationZ;
           // Y rotation affects apparent width (like a coin flip)
@@ -133,7 +145,8 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
         varying float vRotationZ;
         varying float vScaleX;
         varying float vOpacity;
-        
+        uniform vec3 uColor;
+
         void main() {
           vec2 center = gl_PointCoord - 0.5;
           
@@ -154,8 +167,8 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
           vec2 uv = rotated + 0.5;
           vec4 texColor = texture2D(uTexture, uv);
           if (texColor.a < 0.1) discard;
-          
-          gl_FragColor = vec4(1.0, 1.0, 1.0, texColor.a * vOpacity * vScaleX);
+
+          gl_FragColor = vec4(uColor, texColor.a * vOpacity * vScaleX);
         }
       `,
       transparent: true,
@@ -234,7 +247,7 @@ export default function Snowfall({ count = 200 }: { count?: number }) {
       const rotationZAttr = geometry.getAttribute('rotationZ') as THREE.BufferAttribute
       const rotationYAttr = geometry.getAttribute('rotationY') as THREE.BufferAttribute
       
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < particleCount; i++) {
         const particle = particles[i]
         
         // Only apply wind if mouse is actually moving
