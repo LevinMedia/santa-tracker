@@ -475,26 +475,26 @@ const FlightLogPanel = memo(function FlightLogPanel({
     touchEndX.current = null
   }, [nextStop, prevStop, navigateToStop])
 
-  // Format time for display - just use the UTC time from CSV directly
-  const formatTimeWithDate = (utcTime: string) => {
-    if (!utcTime) return '--:--'
-    // utcTime is already in format "2025-12-05 00:00:00"
+  // Format local time for display using the CSV-provided local_time string
+  const formatLocalTimeWithDate = (localTime: string) => {
+    if (!localTime) return '--:--'
+    // localTime is already in format "2025-12-05 00:00:00"
     // Just format it nicely without any timezone conversion
-    const parts = utcTime.split(' ')
-    if (parts.length !== 2) return utcTime
-    
+    const parts = localTime.split(' ')
+    if (parts.length !== 2) return localTime
+
     const [datePart, timePart] = parts
-    const [year, month, day] = datePart.split('-')
+    const [, month, day] = datePart.split('-')
     const [hour, minute] = timePart.split(':')
-    
+
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const monthName = months[parseInt(month) - 1] || month
-    
+
     // Convert to 12-hour format
     const hourNum = parseInt(hour)
     const hour12 = hourNum === 0 ? 12 : hourNum > 12 ? hourNum - 12 : hourNum
     const ampm = hourNum < 12 ? 'AM' : 'PM'
-    
+
     return `${monthName} ${parseInt(day)}, ${hour12}:${minute} ${ampm}`
   }
 
@@ -538,8 +538,8 @@ const FlightLogPanel = memo(function FlightLogPanel({
   }
 
   // Format datetime for human-readable display (e.g., "December 25, 2024 at 12:00 AM")
-  // Uses the UTC time string directly from CSV without timezone conversion
-  const formatDateTime = (dateTimeStr: string) => {
+  // Uses the local time string directly from CSV without timezone conversion
+  const formatLocalDateTime = (dateTimeStr: string) => {
     if (!dateTimeStr) return 'N/A'
     try {
       // dateTimeStr is in format "2024-12-25 11:00:00"
@@ -723,7 +723,10 @@ const FlightLogPanel = memo(function FlightLogPanel({
                             {formatRelativeTime(stop.utc_time)}
                           </div>
                           <div className={`text-[10px] ${isSelected ? 'text-black/70' : 'text-[#33ff33]/60'}`}>
-                            {formatTimeWithDate(stop.utc_time)} UTC
+                            {formatLocalTimeWithDate(stop.local_time)}
+                          </div>
+                          <div className={`text-[10px] ${isSelected ? 'text-black/70' : 'text-[#33ff33]/60'}`}>
+                            {formatOffset(stop.utc_offset)}
                           </div>
                         </div>
                       </div>
@@ -809,8 +812,8 @@ const FlightLogPanel = memo(function FlightLogPanel({
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Visited</div>
                   <div className="text-sm">{formatRelativeTime(selectedStop.utc_time)}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mt-2">UTC Time</div>
-                  <div className="text-sm">{formatDateTime(selectedStop.utc_time)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60 mt-2">Local Time</div>
+                  <div className="text-sm">{formatLocalDateTime(selectedStop.local_time)}</div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wider text-[#33ff33]/60">Timezone</div>
