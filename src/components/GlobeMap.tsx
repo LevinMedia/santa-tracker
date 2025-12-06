@@ -751,11 +751,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     setIsPlaying(prev => !prev)
   }, [formatUTCTime, isAtEnd, missionStart, isLive])
 
-  const handleReplayPromptClick = useCallback(() => {
+  const dismissReplayPrompt = useCallback(() => {
     setHasInteractedWithReplay(true)
     setShowReplayPrompt(false)
+  }, [])
+
+  const handleReplayPromptClick = useCallback(() => {
+    dismissReplayPrompt()
     togglePlay()
-  }, [togglePlay])
+  }, [dismissReplayPrompt, togglePlay])
   
   // Jump to live position
   const jumpToLive = useCallback(() => {
@@ -1053,21 +1057,25 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         </div>
 
         {showReplayPrompt && !isLive && (
-          <div className="absolute inset-0 flex items-center justify-center z-[1100] pointer-events-none">
+          <div
+            className="absolute inset-0 z-[1100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={dismissReplayPrompt}
+          >
             <div
-              className="pointer-events-auto flex flex-col items-center gap-3 rounded-xl border border-[#33ff33]/50 bg-black/80 px-6 py-5 text-center text-[#33ff33] shadow-[0_0_30px_rgba(51,255,51,0.25)] backdrop-blur-sm"
+              className="pointer-events-auto flex flex-col items-center gap-3 rounded-xl border border-[#33ff33]/50 bg-black/90 px-6 py-5 text-center font-mono text-[#33ff33] shadow-[0_0_30px_rgba(51,255,51,0.25)]"
               style={{ textShadow: '0 0 6px rgba(51, 255, 51, 0.6)' }}
+              onClick={event => event.stopPropagation()}
             >
               <div className="text-[11px] uppercase tracking-[0.3em] text-[#33ff33]/70">Replay ready</div>
               <div className="text-base md:text-lg font-semibold">Watch Santa's full journey</div>
               <button
                 onClick={handleReplayPromptClick}
-                className="mt-1 flex items-center gap-2 rounded-lg border border-[#33ff33]/70 bg-[#33ff33] px-6 py-3 text-xs font-bold uppercase tracking-[0.25em] text-black shadow-[0_0_20px_rgba(51,255,51,0.5)] transition-transform duration-150 hover:scale-105"
+                className="mt-1 flex items-center gap-2 rounded border border-[#33ff33]/70 bg-[#33ff33] px-6 py-3 text-[11px] font-bold uppercase tracking-[0.25em] text-black shadow-[0_0_20px_rgba(51,255,51,0.5)] transition-transform duration-150 hover:scale-105"
               >
                 <span className="text-sm">▶</span>
                 Start Replay
               </button>
-              <p className="text-[11px] text-[#33ff33]/70">Begin from takeoff to follow every stop.</p>
+              <p className="text-[11px] text-[#33ff33]/70">Relive the ride from liftoff to every rooftop.</p>
             </div>
           </div>
         )}
