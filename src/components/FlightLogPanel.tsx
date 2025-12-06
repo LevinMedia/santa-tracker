@@ -130,9 +130,9 @@ const FlightLogPanel = memo(function FlightLogPanel({
     miniGlobeInstance.current.pointOfView({
       lat: selectedStop.lat,
       lng: selectedStop.lng,
-      altitude: 1.6,
+      altitude: 0.8,
     }, 0)
-  }, [selectedStop])
+  }, [selectedStop, MiniGlobe, miniGlobeSize])
 
   // Lazy-load small globe for mobile detail view
   useEffect(() => {
