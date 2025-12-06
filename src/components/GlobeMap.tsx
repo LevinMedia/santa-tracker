@@ -150,6 +150,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const defaultCameraAltitude = 1.6 // Zoom level
   const [cameraAltitude, setCameraAltitude] = useState<number>(defaultCameraAltitude)
   const [flightLogOpen, setFlightLogOpen] = useState(true)
+  const [showReplayPrompt, setShowReplayPrompt] = useState(false)
+  const [hasInteractedWithReplay, setHasInteractedWithReplay] = useState(false)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -686,7 +688,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
   const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newIndex = parseInt(e.target.value)
-    
+
     if (isLive) {
       // In live mode, can't scrub past liveIndex
       const clampedIndex = Math.min(newIndex, liveIndex)
@@ -702,6 +704,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         }
       }
     } else {
+      setHasInteractedWithReplay(true)
       setCurrentIndex(newIndex)
       if (isPlaying && stops.length > 0) {
         playStartTime.current = Date.now()
@@ -713,8 +716,20 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
   // For live mode: determine if we're at the live edge
   const isAtLiveEdge = isLive && currentIndex === liveIndex && isFollowingLive
-  
+
   const isAtEnd = stops.length > 0 && currentIndex >= stops.length - 1
+
+  useEffect(() => {
+    if (!isLive && !loading && isAtEnd && !hasInteractedWithReplay) {
+      setShowReplayPrompt(true)
+    }
+  }, [hasInteractedWithReplay, isAtEnd, isLive, loading])
+
+  useEffect(() => {
+    if (isPlaying || currentIndex < stops.length - 1) {
+      setShowReplayPrompt(false)
+    }
+  }, [currentIndex, isPlaying, stops.length])
 
   const togglePlay = useCallback(() => {
     if (isLive) {
@@ -722,17 +737,25 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       // If viewing history, could implement "catch up" animation, but for now just jump to live
       return
     }
-    
+
     if (isAtEnd) {
       // Reset for replay - wipe all points
       setCurrentIndex(0)
       setCurrentSimTime(missionStart)
       setDisplayTime(formatUTCTime(missionStart))
       setIsPlaying(true)
+      setHasInteractedWithReplay(true)
       return
     }
+    setHasInteractedWithReplay(true)
     setIsPlaying(prev => !prev)
   }, [formatUTCTime, isAtEnd, missionStart, isLive])
+
+  const handleReplayPromptClick = useCallback(() => {
+    setHasInteractedWithReplay(true)
+    setShowReplayPrompt(false)
+    togglePlay()
+  }, [togglePlay])
   
   // Jump to live position
   const jumpToLive = useCallback(() => {
@@ -744,6 +767,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
   // Handle selecting a stop from the flight log
   const handleSelectStop = useCallback((index: number) => {
+    setHasInteractedWithReplay(true)
     setCurrentIndex(index)
     setIsPlaying(false)
     if (stops[index]) {
@@ -995,49 +1019,69 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
         {/* Globe - shifted up to account for bottom HUD */}
         <div ref={containerRef} className="absolute inset-0" style={{ transform: 'translateY(-2.5%)' }}>
-        {GlobeComponent && (
-          <GlobeComponent
-            ref={globeRef}
-            width={containerSize.width}
-            height={containerSize.height}
-            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-            backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
-            pointsData={visitedPoints}
-            pointLat="lat"
-            pointLng="lng"
-            pointColor="color"
-            pointRadius="size"
-            pointAltitude={0}
-            arcsData={arcsData}
-            arcStartLat="startLat"
-            arcStartLng="startLng"
-            arcEndLat="endLat"
-            arcEndLng="endLng"
-            arcColor={(d: any) => `rgba(51, 255, 51, ${d.opacity})`}
-            arcStroke={Math.max(0.15, Math.min(0.6, 0.6 * (cameraAltitude / 2)))}
-            arcAltitude={(d: any) => d.altitude}
-            arcDashLength={(d: any) => d.dashLength}
-            arcDashGap={2}
-            arcDashAnimateTime={0}
-            atmosphereColor="#33ff33"
-            atmosphereAltitude={0.15}
-            animateIn={false}
-            onGlobeReady={() => setGlobeReady(true)}
-          />
+          {GlobeComponent && (
+            <GlobeComponent
+              ref={globeRef}
+              width={containerSize.width}
+              height={containerSize.height}
+              globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+              backgroundImageUrl="//unpkg.com/three-globe/example/img/night-sky.png"
+              pointsData={visitedPoints}
+              pointLat="lat"
+              pointLng="lng"
+              pointColor="color"
+              pointRadius="size"
+              pointAltitude={0}
+              arcsData={arcsData}
+              arcStartLat="startLat"
+              arcStartLng="startLng"
+              arcEndLat="endLat"
+              arcEndLng="endLng"
+              arcColor={(d: any) => `rgba(51, 255, 51, ${d.opacity})`}
+              arcStroke={Math.max(0.15, Math.min(0.6, 0.6 * (cameraAltitude / 2)))}
+              arcAltitude={(d: any) => d.altitude}
+              arcDashLength={(d: any) => d.dashLength}
+              arcDashGap={2}
+              arcDashAnimateTime={0}
+              atmosphereColor="#33ff33"
+              atmosphereAltitude={0.15}
+              animateIn={false}
+              onGlobeReady={() => setGlobeReady(true)}
+            />
+          )}
+
+        </div>
+
+        {showReplayPrompt && !isLive && (
+          <div className="absolute inset-0 flex items-center justify-center z-[1100] pointer-events-none">
+            <div
+              className="pointer-events-auto flex flex-col items-center gap-3 rounded-xl border border-[#33ff33]/50 bg-black/80 px-6 py-5 text-center text-[#33ff33] shadow-[0_0_30px_rgba(51,255,51,0.25)] backdrop-blur-sm"
+              style={{ textShadow: '0 0 6px rgba(51, 255, 51, 0.6)' }}
+            >
+              <div className="text-[11px] uppercase tracking-[0.3em] text-[#33ff33]/70">Replay ready</div>
+              <div className="text-base md:text-lg font-semibold">Watch Santa's full journey</div>
+              <button
+                onClick={handleReplayPromptClick}
+                className="mt-1 flex items-center gap-2 rounded-lg border border-[#33ff33]/70 bg-[#33ff33] px-6 py-3 text-xs font-bold uppercase tracking-[0.25em] text-black shadow-[0_0_20px_rgba(51,255,51,0.5)] transition-transform duration-150 hover:scale-105"
+              >
+                <span className="text-sm">▶</span>
+                Start Replay
+              </button>
+              <p className="text-[11px] text-[#33ff33]/70">Begin from takeoff to follow every stop.</p>
+            </div>
+          </div>
         )}
-        
-      </div>
-      
-      {/* Scrubber Control Panel */}
-      <div
-        className="absolute bottom-0 left-0 right-0 z-[1000] font-mono px-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8"
-        style={{
-          textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
-        }}
-      >
-        {currentStop && !flightLogOpen && (
-          <div className="pb-3 text-center text-[#33ff33]">
+
+        {/* Scrubber Control Panel */}
+        <div
+          className="absolute bottom-0 left-0 right-0 z-[1000] font-mono px-4 bg-gradient-to-t from-black/90 via-black/70 to-transparent pt-8"
+          style={{
+            textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.4)',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
+          }}
+        >
+          {currentStop && !flightLogOpen && (
+            <div className="pb-3 text-center text-[#33ff33]">
             <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
               Last verified location
             </div>
