@@ -76,6 +76,52 @@ function formatElapsedTime(ms: number): string {
   return `${hours}h ${minutes}m`
 }
 
+function haversineDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRadians = (deg: number) => deg * Math.PI / 180
+  const R = 6371 // Earth's radius in km
+
+  const dLat = toRadians(lat2 - lat1)
+  const dLng = toRadians(lng2 - lng1)
+
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+    Math.sin(dLng / 2) ** 2
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function calculateBearingDegrees(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRadians = (deg: number) => deg * Math.PI / 180
+  const toDegrees = (rad: number) => rad * 180 / Math.PI
+
+  const phi1 = toRadians(lat1)
+  const phi2 = toRadians(lat2)
+  const deltaLambda = toRadians(lng2 - lng1)
+
+  const y = Math.sin(deltaLambda) * Math.cos(phi2)
+  const x = Math.cos(phi1) * Math.sin(phi2) -
+    Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda)
+
+  const theta = Math.atan2(y, x)
+  const bearing = (toDegrees(theta) + 360) % 360
+  return bearing
+}
+
+function bearingToCompass(degrees: number): string {
+  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+  const index = Math.round(degrees / 22.5) % 16
+  return directions[index]
+}
+
+type StatusView = 'location' | 'speed' | 'heading' | 'next'
+
+const STATUS_ROTATE_INTERVAL_MS = 3000
+const STATUS_FADE_DURATION_MS = 250
+const LONG_TRAVEL_DURATION_MS = 6 * 60 * 1000
+
+const STATUS_ORDER: StatusView[] = ['location', 'speed', 'heading', 'next']
+
 const SPEED_OPTIONS = [
   { value: 1, label: '1x' },
   { value: 2, label: '2x' },
@@ -152,6 +198,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const [flightLogOpen, setFlightLogOpen] = useState(true)
   const [showReplayPrompt, setShowReplayPrompt] = useState(false)
   const [hasInteractedWithReplay, setHasInteractedWithReplay] = useState(false)
+  const [statusView, setStatusView] = useState<StatusView>('location')
+  const [statusFading, setStatusFading] = useState(false)
   
   // Loading state
   const [initialized, setInitialized] = useState(false)
@@ -795,9 +843,14 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
   const currentStop = stops[currentIndex]
   // In live mode, progress is relative to liveIndex (available stops), not total stops
-  const progress = isLive 
+  const progress = isLive
     ? (liveIndex > 0 ? ((currentIndex + 1) / (liveIndex + 1)) * 100 : 0)
     : (stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0)
+
+  useEffect(() => {
+    setStatusView('location')
+    setStatusFading(false)
+  }, [currentStop?.stop_number])
 
   const elapsedMs = missionStart > 0 && currentSimTime
     ? Math.max(0, currentSimTime - missionStart)
@@ -872,17 +925,79 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   // Calculate estimated position (tip of the arc when animating)
   const estimatedPosition = useMemo(() => {
     if (!currentStop) return null
-    
+
     const isAnimating = isLive ? isFollowingLive : isPlaying
     const activeProgress = travelProgress
     
     if (isAnimating && nextStop && activeProgress > 0) {
       return interpolateGreatCircle(currentStop, nextStop, activeProgress)
     }
-    
+
     // When not animating, show current stop position
     return { lat: currentStop.lat, lng: currentStop.lng }
   }, [currentStop, nextStop, travelProgress, isPlaying, isLive, isFollowingLive])
+
+  const legStats = useMemo(() => {
+    if (!currentStop || !nextStop) return null
+
+    const legDurationMs = nextStop.timestamp - currentStop.timestamp
+    const distanceKm = haversineDistanceKm(currentStop.lat, currentStop.lng, nextStop.lat, nextStop.lng)
+    const hours = legDurationMs / 3600000
+    const speedKmh = hours > 0 ? distanceKm / hours : 0
+    const etaMs = nextStop.timestamp - currentSimTime
+    const bearingDegrees = calculateBearingDegrees(
+      estimatedPosition?.lat ?? currentStop.lat,
+      estimatedPosition?.lng ?? currentStop.lng,
+      nextStop.lat,
+      nextStop.lng
+    )
+
+    return { legDurationMs, speedKmh, etaMs, bearingDegrees }
+  }, [currentStop, nextStop, currentSimTime, estimatedPosition])
+
+  const shouldCycleStatus = useMemo(() => {
+    if (!currentStop || !nextStop || !legStats) return false
+
+    const isAnimating = isLive ? isFollowingLive : isPlaying
+    if (!isAnimating || travelProgress <= 0) return false
+
+    return legStats.legDurationMs >= LONG_TRAVEL_DURATION_MS
+  }, [currentStop, nextStop, legStats, isLive, isFollowingLive, isPlaying, travelProgress])
+
+  useEffect(() => {
+    if (!shouldCycleStatus) {
+      setStatusView('location')
+      setStatusFading(false)
+      return
+    }
+
+    let fadeTimeout: ReturnType<typeof setTimeout> | undefined
+    const interval = setInterval(() => {
+      setStatusFading(true)
+      fadeTimeout = setTimeout(() => {
+        setStatusView(prev => {
+          const currentIndex = STATUS_ORDER.indexOf(prev)
+          const nextIndex = (currentIndex + 1) % STATUS_ORDER.length
+          return STATUS_ORDER[nextIndex]
+        })
+        setStatusFading(false)
+      }, STATUS_FADE_DURATION_MS)
+    }, STATUS_ROTATE_INTERVAL_MS)
+
+    return () => {
+      clearInterval(interval)
+      if (fadeTimeout) clearTimeout(fadeTimeout)
+    }
+  }, [shouldCycleStatus])
+
+  const speedDisplay = legStats ? `${Math.round(legStats.speedKmh).toLocaleString()} km/h` : '--'
+  const headingDisplay = legStats
+    ? `${bearingToCompass(legStats.bearingDegrees)} (${Math.round(legStats.bearingDegrees)}°)`
+    : '--'
+  const projectedStop = nextStop ? `${nextStop.city}, ${nextStop.country}` : '--'
+  const etaDisplay = legStats
+    ? (legStats.etaMs > 0 ? formatElapsedTime(legStats.etaMs) : 'Arriving now')
+    : '--'
   
   
   // Cached empty array for when not animating (avoid recreating empty array every frame)
@@ -1088,15 +1203,43 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
           }}
         >
           {currentStop && !flightLogOpen && (
-            <div className="pb-3 text-center text-[#33ff33]">
-            <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
-              Last verified location
+            <div
+              className={`pb-3 text-center text-[#33ff33] transition-opacity duration-300 ${statusFading ? 'opacity-0' : 'opacity-100'}`}
+            >
+              {statusView === 'location' && (
+                <>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">
+                    Last verified location
+                  </div>
+                  <div className="text-sm md:text-base font-semibold uppercase">
+                    {currentStop.city}, {currentStop.country}
+                  </div>
+                </>
+              )}
+
+              {statusView === 'speed' && (
+                <>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">Current speed</div>
+                  <div className="text-sm md:text-base font-semibold uppercase">{speedDisplay}</div>
+                </>
+              )}
+
+              {statusView === 'heading' && (
+                <>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">Current heading</div>
+                  <div className="text-sm md:text-base font-semibold uppercase">{headingDisplay}</div>
+                </>
+              )}
+
+              {statusView === 'next' && (
+                <>
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-[#33ff33]/60">Projected next stop</div>
+                  <div className="text-sm md:text-base font-semibold uppercase">{projectedStop}</div>
+                  <div className="text-xs uppercase tracking-[0.25em] text-[#33ff33]/70">ETA {etaDisplay}</div>
+                </>
+              )}
             </div>
-            <div className="text-sm md:text-base font-semibold uppercase">
-              {currentStop.city}, {currentStop.country}
-            </div>
-          </div>
-        )}
+          )}
 
         {/* Re-center button when camera is detached */}
         {!isCameraTracking && (
