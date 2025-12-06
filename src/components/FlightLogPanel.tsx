@@ -607,7 +607,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
             </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 text-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors border border-[#33ff33]/50 text-xs px-2 py-1"
+              className="flex items-center gap-1.5 bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-2 py-1"
             >
               <span>✕</span>
               <span>CLOSE</span>

@@ -992,34 +992,33 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         `}
       >
         {/* Flight Log Trigger Button */}
-        <button
-          onClick={() => setFlightLogOpen(!flightLogOpen)}
-          className={`absolute left-4 z-[1000] flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono
-            ${flightLogOpen 
-              ? 'bg-[#33ff33] text-black border-[#33ff33]' 
-              : 'bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black'
-            }`}
-          style={{
-            textShadow: flightLogOpen ? 'none' : '0 0 5px rgba(51, 255, 51, 0.8)',
-            top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)',
-          }}
-          title="Flight Log"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {!flightLogOpen && (
+          <button
+            onClick={() => setFlightLogOpen(!flightLogOpen)}
+            className={`absolute left-4 z-[1000] flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono
+              bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black`}
+            style={{
+              textShadow: '0 0 5px rgba(51, 255, 51, 0.8)',
+              top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)',
+            }}
+            title="Flight Log"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-          FLIGHT LOG
-        </button>
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
+            </svg>
+            FLIGHT LOG
+          </button>
+        )}
 
         {/* Globe - shifted up to account for bottom HUD */}
         <div ref={containerRef} className="absolute inset-0" style={{ transform: 'translateY(-2.5%)' }}>
