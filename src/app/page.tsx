@@ -269,7 +269,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
-  { key: 'V', label: 'VIEW PREVIOUS FLIGHTS', href: '/flights', delay: 5400 },
+  { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
   { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
@@ -326,7 +326,7 @@ function HomeContent() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null)
   const [activeFlightMenuId, setActiveFlightMenuId] = useState<string | null>(null)
-  const [flightLogs, setFlightLogs] = useState<FlightLog[]>([])
+  const [flightLogs] = useState<FlightLog[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [announcementComplete, setAnnouncementComplete] = useState(false)
   const [isShutdown, setIsShutdown] = useState(false)
@@ -813,14 +813,14 @@ function HomeContent() {
         return
       }
 
-      if (normalized === '1' || normalized === 'V') {
+      if (normalized === 'R') {
         setIsProcessing(true)
         setShowPrompt(false)
         setActiveOptionsId(null)
         appendEntry({
-          id: `cmd-v-${Date.now()}`,
+          id: `cmd-r-${Date.now()}`,
           kind: 'text',
-          text: '> COMMAND [V] VIEW PREVIOUS FLIGHTS',
+          text: '> COMMAND [R] 2024 TRACKER REPLAY',
         })
         await sleep(200)
 
@@ -829,55 +829,26 @@ function HomeContent() {
         appendEntry({
           id: loadingId,
           kind: 'text',
-          text: 'LOADING HISTORICAL FLIGHT LOGS / ...',
+          text: 'LOADING 2024 TRACKER REPLAY / ...',
         })
 
-        // Fetch available flight logs while showing animation
-        let logs: FlightLog[] = []
-        const fetchPromise = fetch('/api/flight-logs')
-          .then(res => res.json())
-          .then(data => {
-            logs = data.flightLogs || []
-          })
-          .catch(() => {
-            logs = []
-          })
-
         for (let i = 0; i < 18; i++) {
-          updateEntry(loadingId, `LOADING HISTORICAL FLIGHT LOGS ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
+          updateEntry(loadingId, `LOADING 2024 TRACKER REPLAY ${frames[i % frames.length]} ${'.'.repeat((i % 3) + 1)}`)
           await sleep(140)
-        }
-        
-        await fetchPromise
-        setFlightLogs(logs)
-        
-        if (logs.length === 0) {
-          appendEntry({
-            id: `no-logs-${Date.now()}`,
-            kind: 'text',
-            text: 'NO HISTORICAL FLIGHT LOGS FOUND.',
-          })
-          await sleep(500)
-          appendEntry({
-            id: `divider-${Date.now()}`,
-            kind: 'hr',
-          })
-          appendOptionsEntry()
-          setShowPrompt(true)
-          setIsProcessing(false)
-          return
         }
 
         appendEntry({
           id: `found-logs-${Date.now()}`,
           kind: 'text',
-          text: `FOUND ${logs.length} HISTORICAL FLIGHT LOG${logs.length > 1 ? 'S' : ''}.`,
+          text: 'REPLAY READY. LAUNCHING 2024 MISSION...',
           className: 'mb-10'
         })
-        
+
         await sleep(300)
-        
-        appendFlightMenuEntry()
+
+        router.push('/map?flight=2024_santa_tracker&mode=replay')
+
+        appendOptionsEntry()
         setUserInput('')
         setShowPrompt(true)
         setIsProcessing(false)
