@@ -227,15 +227,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const [liveTravelProgress, setLiveTravelProgress] = useState(0)
   const [isFollowingLive, setIsFollowingLive] = useState(mode === 'live')
   const isLive = mode === 'live'
+
+  const flightYear = useMemo(() => {
+    const match = dataFile.match(/\/(\d{4})_santa_tracker/)
+    return match ? parseInt(match[1], 10) : undefined
+  }, [dataFile])
   
   // Weather now fetched per-stop in real-time (live mode only)
   
   // Camera tracking state - when false, user has manually rotated globe
   const [isCameraTracking, setIsCameraTracking] = useState(true)
-  
+
   // Weather update version - increments when weather is updated to trigger re-renders
   // without copying the entire stops array
   const [weatherVersion, setWeatherVersion] = useState(0)
+  const [hasLoadedReplayWeather, setHasLoadedReplayWeather] = useState(false)
   
   const playStartTime = useRef<number>(0)
   const playStartIndex = useRef<number>(0)
@@ -328,24 +334,26 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   // Load flight data in background
   useEffect(() => {
     setLoading(true)
+    setHasLoadedReplayWeather(false)
     // Add cache-busting to ensure fresh data
     fetch(`${dataFile}?t=${Date.now()}`)
       .then(res => res.text())
       .then(csv => {
         const lines = csv.trim().split('\n')
         const data: FlightStop[] = []
-        
+        const shouldUseCsvWeather = isLive || !flightYear || flightYear <= 2024
+
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i])
           const lat = parseFloat(values[3])
           const lng = parseFloat(values[4])
           const utc_time = values[8] || ''
           const population = values[10] ? parseInt(values[10], 10) : undefined
-          const temperature_c = values[11] ? parseFloat(values[11]) : undefined
-          const weather_condition = values[12] || undefined
-          const wind_speed_mps = values[13] ? parseFloat(values[13]) : undefined
-          const wind_direction_deg = values[14] ? parseFloat(values[14]) : undefined
-          const wind_gust_mps = values[15] ? parseFloat(values[15]) : undefined
+          const temperature_c = shouldUseCsvWeather && values[11] ? parseFloat(values[11]) : undefined
+          const weather_condition = shouldUseCsvWeather ? values[12] || undefined : undefined
+          const wind_speed_mps = shouldUseCsvWeather && values[13] ? parseFloat(values[13]) : undefined
+          const wind_direction_deg = shouldUseCsvWeather && values[14] ? parseFloat(values[14]) : undefined
+          const wind_gust_mps = shouldUseCsvWeather && values[15] ? parseFloat(values[15]) : undefined
 
           if (isNaN(lat) || isNaN(lng)) continue
 
@@ -387,7 +395,84 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         console.error('Error loading flight data:', err)
         setLoading(false)
       })
-  }, [dataFile, isLive, mode])
+  }, [dataFile, flightYear, isLive, mode])
+
+  // Replay mode (2025+): fetch weather from Supabase instead of CSV
+  useEffect(() => {
+    if (isLive || loading || stops.length === 0 || hasLoadedReplayWeather) return
+    if (!flightYear || flightYear <= 2024) return
+
+    let isCancelled = false
+
+    const fetchWeather = async () => {
+      const timezones = Array.from(new Set(
+        stops
+          .map(stop => stop.utc_offset_rounded)
+          .filter((tz): tz is number => typeof tz === 'number' && !isNaN(tz))
+      ))
+
+      if (timezones.length === 0) {
+        setHasLoadedReplayWeather(true)
+        return
+      }
+
+      const weatherByStop: Record<number, {
+        temperature_c: number
+        weather_condition: string
+        wind_speed_mps: number
+        wind_direction_deg: number
+        wind_gust_mps: number | null
+      }> = {}
+
+      for (const tz of timezones) {
+        try {
+          const response = await fetch('/api/weather/get', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ timezone: tz })
+          })
+
+          const data = await response.json()
+          if (data.success && data.weather) {
+            Object.assign(weatherByStop, data.weather)
+          }
+        } catch (error) {
+          console.error(`Error fetching weather for timezone ${tz}:`, error)
+        }
+      }
+
+      if (isCancelled) return
+
+      if (Object.keys(weatherByStop).length > 0) {
+        setStops(prevStops =>
+          prevStops.map(stop => {
+            const weather = weatherByStop[stop.stop_number]
+            if (!weather) return stop
+
+            return {
+              ...stop,
+              temperature_c: weather.temperature_c ?? stop.temperature_c,
+              weather_condition: weather.weather_condition ?? stop.weather_condition,
+              wind_speed_mps: weather.wind_speed_mps ?? stop.wind_speed_mps,
+              wind_direction_deg: weather.wind_direction_deg ?? stop.wind_direction_deg,
+              wind_gust_mps: weather.wind_gust_mps ?? stop.wind_gust_mps,
+            }
+          })
+        )
+
+        setWeatherVersion(v => v + 1)
+        console.log(`Loaded weather for ${Object.keys(weatherByStop).length} stops from Supabase (replay ${flightYear})`)
+      }
+
+      setHasLoadedReplayWeather(true)
+    }
+
+    fetchWeather()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [flightYear, hasLoadedReplayWeather, isLive, loading, stops])
 
   // Format timestamp to UTC string
   const formatUTCTime = useCallback((timestamp: number): string => {
