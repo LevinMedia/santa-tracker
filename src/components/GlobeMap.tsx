@@ -303,13 +303,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         }
         
         setStops(data)
-        
+
         if (isLive) {
           // Live mode: start at beginning, will calculate live position
           setCurrentIndex(0)
         } else {
-          // Replay mode: start at end
-          setCurrentIndex(Math.max(0, data.length - 1))
+          // Replay mode: start at the beginning
+          setCurrentIndex(0)
         }
         
         setLoading(false)
@@ -1027,7 +1027,18 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             onGlobeReady={() => setGlobeReady(true)}
           />
         )}
-        
+
+        {!isLive && isAtEnd && !isPlaying && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <button
+              onClick={togglePlay}
+              className="pointer-events-auto bg-[#33ff33] text-black font-mono text-xs px-4 py-2 border border-[#33ff33] shadow-[0_0_12px_rgba(51,255,51,0.6)] hover:bg-white"
+            >
+              REPLAY
+            </button>
+          </div>
+        )}
+
       </div>
       
       {/* Scrubber Control Panel */}
