@@ -130,7 +130,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
     miniGlobeInstance.current.pointOfView({
       lat: selectedStop.lat,
       lng: selectedStop.lng,
-      altitude: 1.8,
+      altitude: 1.6,
     }, 0)
   }, [selectedStop])
 
@@ -869,7 +869,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
             {/* Mobile-only static globe preview */}
             {selectedStop && (
               <div className="md:hidden border-b border-[#33ff33]/20 bg-black/70" ref={miniGlobeRef}
-                style={{ height: '32vh', minHeight: '200px' }}
+                style={{ height: '24vh', minHeight: '150px' }}
               >
                 {MiniGlobe && miniGlobeSize.width > 0 && miniGlobeSize.height > 0 ? (
                   <MiniGlobe
@@ -886,11 +886,6 @@ const FlightLogPanel = memo(function FlightLogPanel({
                     pointAltitude={0}
                     pointColor={() => '#33ff33'}
                     pointRadius={0.6}
-                    labelsData={[{ lat: selectedStop.lat, lng: selectedStop.lng, text: selectedStop.city }]}
-                    labelColor={() => 'rgba(51,255,51,0.8)'}
-                    labelDotRadius={0.6}
-                    labelSize={1.4}
-                    labelResolution={4}
                   />
                 ) : (
                   <div className="h-full w-full flex items-center justify-center text-[#33ff33]/40 text-xs">
