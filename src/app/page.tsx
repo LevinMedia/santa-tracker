@@ -1179,7 +1179,7 @@ function HomeContent() {
           {flares.map(flare => (
             <span
               key={flare.id}
-              className="absolute w-16 h-16 -ml-8 -mt-8 rounded-full bg-red-500/70 blur-xl mix-blend-screen animate-flare"
+              className="flare-dot absolute w-16 h-16 -ml-8 -mt-8 rounded-full mix-blend-screen"
               style={{ left: flare.x, top: flare.y }}
             />
           ))}
