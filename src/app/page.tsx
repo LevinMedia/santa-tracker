@@ -333,10 +333,13 @@ function HomeContent() {
   const [isSantaLive, setIsSantaLive] = useState(false)
   const [isFlightComplete, setIsFlightComplete] = useState(false)
   const [showAboutBack, setShowAboutBack] = useState(false)
+  const [flares, setFlares] = useState<{ id: number; x: number; y: number }[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const initialScrollDoneRef = useRef(false)
   const timersRef = useRef<NodeJS.Timeout[]>([])
+  const flareIdRef = useRef(0)
+  const flareTimersRef = useRef<NodeJS.Timeout[]>([])
 
   // Calculate countdown to next Christmas
   const getNextChristmas = useCallback(() => {
@@ -456,6 +459,31 @@ function HomeContent() {
   )
 
   const sleep = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), [])
+
+  const addFlarePoint = useCallback((clientX: number, clientY: number) => {
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    const id = flareIdRef.current++
+
+    setFlares(prev => [...prev.slice(-25), { id, x, y }])
+
+    const timeout = setTimeout(() => {
+      setFlares(prev => prev.filter(flare => flare.id !== id))
+      flareTimersRef.current = flareTimersRef.current.filter(t => t !== timeout)
+    }, 450)
+
+    flareTimersRef.current.push(timeout)
+  }, [])
+
+  const handlePointerTrail = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isShutdown) return
+      addFlarePoint(event.clientX, event.clientY)
+    },
+    [addFlarePoint, isShutdown],
+  )
 
   const runBootSequence = useCallback(() => {
     if (hasBootRun.current) return
@@ -612,6 +640,10 @@ function HomeContent() {
 
     return () => timersRef.current.forEach(t => clearTimeout(t))
   }, [appendOptionsEntry, runBootSequence])
+
+  useEffect(() => {
+    return () => flareTimersRef.current.forEach(timeout => clearTimeout(timeout))
+  }, [])
 
   // Auto-scroll to bottom only if user is near the bottom (for passive updates)
   const isNearBottom = useCallback(() => {
@@ -1137,10 +1169,22 @@ function HomeContent() {
         className={`relative z-0 w-full h-full p-4 sm:p-8 font-mono pb-16 ${
           isShutdown ? 'overflow-hidden touch-none' : 'overflow-auto'
         }`}
+        onPointerDown={handlePointerTrail}
+        onPointerMove={handlePointerTrail}
         style={{
           textShadow: '0 0 5px rgba(51, 255, 51, 0.8), 0 0 10px rgba(51, 255, 51, 0.5), 0 0 20px rgba(51, 255, 51, 0.3)',
         }}
       >
+        <div className="pointer-events-none absolute inset-0 z-30">
+          {flares.map(flare => (
+            <span
+              key={flare.id}
+              className="absolute w-16 h-16 -ml-8 -mt-8 rounded-full bg-red-500/70 blur-xl mix-blend-screen animate-flare"
+              style={{ left: flare.x, top: flare.y }}
+            />
+          ))}
+        </div>
+
         {/* Terminal stream */}
         <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed max-w-[650px]">
           {entries.map(entry => {
