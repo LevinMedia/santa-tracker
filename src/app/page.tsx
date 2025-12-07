@@ -286,7 +286,7 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
-  { key: 'D', label: "DONATE TO MICHAEL J. FOX FOUNDATION", href: 'https://give.michaeljfox.org/fundraiser/6860349?is_new=true', delay: 5200, external: true },
+  { key: 'D', label: "DONATE TO MICHAEL J. FOX FOUNDATION", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5200, external: true },
   { key: '5', label: '2025 TRACKER REPLAY', href: '/map?flight=2025_santa_tracker&mode=replay', delay: 5300 },
   { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
   { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },
