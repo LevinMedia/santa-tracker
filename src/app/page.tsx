@@ -77,10 +77,15 @@ function OptionsEntry({
   const [showCTA, setShowCTA] = useState(!isActive)
   
   // Filter out 2025 replay until flight is complete (after flight window)
-  const filteredOptions = useMemo(() => 
+  const filteredOptions = useMemo(() =>
     COMMAND_OPTIONS.filter(option => !(option.key === '5' && !isFlightComplete)),
     [isFlightComplete]
   )
+  const primaryReplayKey = useMemo(() => {
+    if (isSantaLive) return null
+    if (isFlightComplete) return '5'
+    return 'R'
+  }, [isFlightComplete, isSantaLive])
   const [visibleButtons, setVisibleButtons] = useState(!isActive ? filteredOptions.length : 0)
   
   const handleTypewriterComplete = useCallback(() => {
@@ -165,34 +170,41 @@ function OptionsEntry({
                 </button>
               </div>
             )}
-            {filteredOptions.slice(0, visibleButtons).map((option) => (
-              <div
-                key={`${entryId}-${option.key}`}
-                className="min-h-[1.5em]"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (option.href === '#' || !isActive) return
-                    trackCommandClick(option.key, option.label)
-                    if (option.external) {
-                      window.open(option.href, '_blank', 'noopener,noreferrer')
-                    } else {
-                    onCommand(option.key)
-                    }
-                  }}
-                  className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap bg-black text-[#33ff33] ${
-                    option.href === '#' || !isActive
-                      ? 'border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
-                      : 'border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
-                  }`}
-                  disabled={isProcessing || option.href === '#' || !isActive}
+            {filteredOptions.slice(0, visibleButtons).map((option) => {
+              const isDisabled = option.href === '#' || !isActive
+              const isPrimaryReplay = option.key === primaryReplayKey && !isDisabled
+
+              return (
+                <div
+                  key={`${entryId}-${option.key}`}
+                  className="min-h-[1.5em]"
                 >
-                  <span className="font-bold underline">{option.key}</span>
-                  <span className="ml-3 leading-none">{option.label}</span>
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isDisabled) return
+                      trackCommandClick(option.key, option.label)
+                      if (option.external) {
+                        window.open(option.href, '_blank', 'noopener,noreferrer')
+                      } else {
+                        onCommand(option.key)
+                      }
+                    }}
+                    className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap ${
+                      isDisabled
+                        ? 'bg-black text-[#33ff33] border border-dashed border-[#33ff33]/50 opacity-50 cursor-not-allowed'
+                        : isPrimaryReplay
+                          ? 'bg-[#33ff33] text-black border border-[#33ff33] hover:bg-[#29d829] hover:border-[#29d829] shadow-[0_0_20px_rgba(51,255,51,0.5)] cursor-pointer'
+                          : 'bg-black text-[#33ff33] border border-[#33ff33] hover:bg-[#33ff33] hover:text-black shadow-[0_0_12px_rgba(51,255,51,0.25)] cursor-pointer'
+                    }`}
+                    disabled={isProcessing || isDisabled}
+                  >
+                    <span className="font-bold underline">{option.key}</span>
+                    <span className="ml-3 leading-none">{option.label}</span>
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </>
       )}
