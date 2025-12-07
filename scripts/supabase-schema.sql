@@ -8,6 +8,7 @@ CREATE TABLE live_weather (
   stop_number INT PRIMARY KEY,
   city TEXT NOT NULL,
   country TEXT NOT NULL,
+  state_province TEXT,
   lat DECIMAL(10, 6) NOT NULL,
   lng DECIMAL(10, 6) NOT NULL,
   timezone TEXT,

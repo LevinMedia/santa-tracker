@@ -1,6 +1,6 @@
 /**
  * Shift flight dates to today/tomorrow for testing
- * Changes Dec 2 → Dec 4, Dec 3 → Dec 5
+ * Changes Dec 24 → Dec 6, Dec 25 → Dec 7
  */
 
 import { readFileSync, writeFileSync } from 'fs'
@@ -13,17 +13,17 @@ console.log('📖 Reading 2025_santa_tracker.csv...')
 let content = readFileSync(INPUT_FILE, 'utf-8')
 
 // Count replacements
-let dec2Count = (content.match(/2025-12-02/g) || []).length
-let dec3Count = (content.match(/2025-12-03/g) || []).length
+let dec24Count = (content.match(/2025-12-24/g) || []).length
+let dec25Count = (content.match(/2025-12-25/g) || []).length
 
-// Shift dates: Dec 2 → Dec 4, Dec 3 → Dec 5
-content = content.replace(/2025-12-02/g, '2025-12-04')
-content = content.replace(/2025-12-03/g, '2025-12-05')
+// Shift dates: Dec 24 → Dec 6, Dec 25 → Dec 7
+content = content.replace(/2025-12-24/g, '2025-12-06')
+content = content.replace(/2025-12-25/g, '2025-12-07')
 
 writeFileSync(OUTPUT_FILE, content)
 
 console.log('✅ Dates shifted!')
-console.log(`   2025-12-02 → 2025-12-04 (${dec2Count} replacements)`)
-console.log(`   2025-12-03 → 2025-12-05 (${dec3Count} replacements)`)
+console.log(`   2025-12-24 → 2025-12-06 (${dec24Count} replacements)`)
+console.log(`   2025-12-25 → 2025-12-07 (${dec25Count} replacements)`)
 console.log('')
 console.log('📝 Run "npm run build" to regenerate flight-window.ts')

@@ -35,6 +35,7 @@ interface Stop {
   stop_number: number
   city: string
   country: string
+  state_province: string
   lat: number
   lng: number
   timezone: string
@@ -67,16 +68,19 @@ function parseCSV(csvContent: string): Stop[] {
     }
     values.push(current)
     
+    // CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone,
+    //              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, ...
     stops.push({
       stop_number: parseInt(values[0]),
       city: values[1],
       country: values[2],
-      lat: parseFloat(values[3]),
-      lng: parseFloat(values[4]),
-      timezone: values[5],
-      utc_offset_rounded: parseInt(values[7]),
-      utc_time: values[8],
-      local_time: values[9],
+      state_province: values[3] || '',
+      lat: parseFloat(values[4]),
+      lng: parseFloat(values[5]),
+      timezone: values[6],
+      utc_offset_rounded: parseInt(values[8]),
+      utc_time: values[9],
+      local_time: values[10],
     })
   }
   
@@ -108,6 +112,7 @@ async function syncStops() {
       stop_number: stop.stop_number,
       city: stop.city,
       country: stop.country,
+      state_province: stop.state_province || null,
       lat: stop.lat,
       lng: stop.lng,
       timezone: stop.timezone,

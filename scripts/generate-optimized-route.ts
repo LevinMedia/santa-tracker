@@ -21,6 +21,7 @@ interface City {
   stop_number: number
   city: string
   country: string
+  state_province: string
   lat: number
   lng: number
   timezone: string
@@ -298,8 +299,8 @@ async function main() {
   // Get year from command line args (default: 2024)
   const year = parseInt(process.argv[2]) || 2024
   
-  // Use 2024 as source file (has all the cities)
-  const inputFile = path.join(__dirname, '../public/2024_santa_tracker.csv')
+  // Use santa_seed.csv as source file (has all the cities including new islands)
+  const inputFile = path.join(__dirname, '../public/santa_seed.csv')
   const outputFile = path.join(__dirname, `../public/${year}_santa_tracker.csv`)
   
   console.log(`🎅 Santa Route Optimizer - Christmas ${year}`)
@@ -311,12 +312,13 @@ async function main() {
   const lines = csv.trim().split('\n')
   
   // Parse cities
+  // CSV format: stop_number,city,country,state_province,lat,lng,timezone,utc_offset,utc_offset_rounded,utc_time,local_time,population,...
   const cities: City[] = []
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i])
     
-    const lat = parseFloat(values[3])
-    const lng = parseFloat(values[4])
+    const lat = parseFloat(values[4])  // Column 4 (after state_province)
+    const lng = parseFloat(values[5])  // Column 5
     
     if (isNaN(lat) || isNaN(lng)) continue
     
@@ -327,17 +329,18 @@ async function main() {
       stop_number: parseInt(values[0]) || i,
       city: values[1] || 'Unknown',
       country: values[2] || 'Unknown',
+      state_province: values[3] || '',     // Column 3
       lat,
       lng,
-      timezone: values[5] || '',
-      utc_offset: parseFloat(values[6]) || 0,
-      utc_offset_rounded: parseFloat(values[7]) || 0,
-      population: values[10] ? parseInt(values[10], 10) : undefined,
-      temperature_c: values[11] ? parseFloat(values[11]) : undefined,
-      weather_condition: values[12] || undefined,
-      wind_speed_mps: values[13] ? parseFloat(values[13]) : undefined,
-      wind_direction_deg: values[14] ? parseFloat(values[14]) : undefined,
-      wind_gust_mps: values[15] ? parseFloat(values[15]) : undefined,
+      timezone: values[6] || '',           // Column 6
+      utc_offset: parseFloat(values[7]) || 0,   // Column 7
+      utc_offset_rounded: parseFloat(values[8]) || 0,  // Column 8
+      population: values[11] ? parseInt(values[11], 10) : undefined,  // Column 11
+      temperature_c: values[12] ? parseFloat(values[12]) : undefined,
+      weather_condition: values[13] || undefined,
+      wind_speed_mps: values[14] ? parseFloat(values[14]) : undefined,
+      wind_direction_deg: values[15] ? parseFloat(values[15]) : undefined,
+      wind_gust_mps: values[16] ? parseFloat(values[16]) : undefined,
     })
   }
   
@@ -365,6 +368,7 @@ async function main() {
     stop_number: 0,
     city: 'North Pole',
     country: 'Arctic',
+    state_province: '',
     lat: 90,
     lng: 0,
     timezone: 'UTC+14',
@@ -578,7 +582,7 @@ async function main() {
   
   // Write output CSV
   console.log('\n💾 Writing optimized route...')
-  const outputHeader = 'stop_number,city,country,lat,lng,timezone,utc_offset,utc_offset_rounded,utc_time,local_time,population,temperature_c,weather_condition,wind_speed_mps,wind_direction_deg,wind_gust_mps'
+  const outputHeader = 'stop_number,city,country,state_province,lat,lng,timezone,utc_offset,utc_offset_rounded,utc_time,local_time,population,temperature_c,weather_condition,wind_speed_mps,wind_direction_deg,wind_gust_mps'
   
   const outputLines = [outputHeader]
   for (const stop of fullRoute) {
@@ -586,6 +590,7 @@ async function main() {
       stop.new_stop_number,
       `"${stop.city}"`,
       `"${stop.country}"`,
+      stop.state_province ? `"${stop.state_province}"` : '',
       stop.lat,
       stop.lng,
       stop.timezone,

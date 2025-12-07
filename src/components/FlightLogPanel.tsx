@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Switch } from '@headlessui/react'
+import { formatLocationWithState, matchesStateProvince } from '@/lib/stateAbbreviations'
 
 interface FlightStop {
   stop_number: number
   city: string
   country: string
+  state_province?: string
   lat: number
   lng: number
   utc_time: string
@@ -342,7 +344,9 @@ const FlightLogPanel = memo(function FlightLogPanel({
       (stop) =>
         stop.city.toLowerCase().includes(query) ||
         stop.country.toLowerCase().includes(query) ||
-        stop.stop_number.toString().includes(query)
+        stop.stop_number.toString().includes(query) ||
+        (stop.state_province && stop.state_province.toLowerCase().includes(query)) ||
+        matchesStateProvince(stop.state_province, stop.country, searchQuery)
     )
   }, [baseStops, inReplayMode, isLive, searchQuery, stops])
 
@@ -697,7 +701,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
                   setSearchQuery(e.target.value)
                   setLoadedCount(BATCH_SIZE) // Reset lazy load on search
                 }}
-                placeholder="SEARCH CITY, COUNTRY, OR STOP #..."
+                placeholder="SEARCH CITY, STATE, COUNTRY, OR STOP #..."
                 className="w-full bg-black border border-[#33ff33]/50 text-[#33ff33] text-[16px] md:text-xs px-3 py-2 pl-8 placeholder-[#33ff33]/30 focus:outline-none focus:border-[#33ff33]"
                 style={{ fontSize: '16px' }}
               />
@@ -780,7 +784,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
                             )}
                           </div>
                           <div className={`text-sm truncate mt-0.5 ${isSelected ? 'text-black' : 'text-[#33ff33]'}`}>
-                            {stop.city}
+                            {formatLocationWithState(stop.city, stop.state_province, stop.country)}
                           </div>
                           <div className={`text-[10px] uppercase tracking-wider ${isSelected ? 'text-black/60' : 'text-[#33ff33]/50'}`}>
                             {stop.country}
@@ -860,7 +864,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
                   Stop #{selectedStop.stop_number.toString().padStart(5, '0')}
                 </div>
                 <div className="text-lg text-[#33ff33] mt-0.5">
-                  {selectedStop.city}
+                  {formatLocationWithState(selectedStop.city, selectedStop.state_province, selectedStop.country)}
                 </div>
                 <div className="text-[10px] text-[#33ff33]/50 uppercase tracking-wider">
                   {selectedStop.country}
@@ -1043,7 +1047,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
                 <div className="flex-1 min-w-0">
                   <div className="text-[8px] uppercase tracking-wider text-[#33ff33]/50">Previous</div>
                   <div className="text-xs truncate">
-                    {prevStop ? prevStop.city : 'Start'}
+                    {prevStop ? formatLocationWithState(prevStop.city, prevStop.state_province, prevStop.country) : 'Start'}
                   </div>
                 </div>
               </button>
@@ -1060,7 +1064,7 @@ const FlightLogPanel = memo(function FlightLogPanel({
                 <div className="flex-1 min-w-0">
                   <div className="text-[8px] uppercase tracking-wider text-[#33ff33]/50">Next</div>
                   <div className="text-xs truncate">
-                    {nextStop ? nextStop.city : 'End'}
+                    {nextStop ? formatLocationWithState(nextStop.city, nextStop.state_province, nextStop.country) : 'End'}
                   </div>
                 </div>
                 <span className="text-lg">→</span>

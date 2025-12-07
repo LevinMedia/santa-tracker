@@ -8,6 +8,7 @@ interface FlightStop {
   stop_number: number
   city: string
   country: string
+  state_province?: string
   lat: number
   lng: number
   utc_time: string
@@ -345,15 +346,18 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
 
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i])
-          const lat = parseFloat(values[3])
-          const lng = parseFloat(values[4])
-          const utc_time = values[8] || ''
-          const population = values[10] ? parseInt(values[10], 10) : undefined
-          const temperature_c = shouldUseCsvWeather && values[11] ? parseFloat(values[11]) : undefined
-          const weather_condition = shouldUseCsvWeather ? values[12] || undefined : undefined
-          const wind_speed_mps = shouldUseCsvWeather && values[13] ? parseFloat(values[13]) : undefined
-          const wind_direction_deg = shouldUseCsvWeather && values[14] ? parseFloat(values[14]) : undefined
-          const wind_gust_mps = shouldUseCsvWeather && values[15] ? parseFloat(values[15]) : undefined
+          // CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone,
+          //              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, 11-population
+          //              12-temperature_c, 13-weather_condition, 14-wind_speed_mps, 15-wind_direction_deg, 16-wind_gust_mps
+          const lat = parseFloat(values[4])
+          const lng = parseFloat(values[5])
+          const utc_time = values[9] || ''
+          const population = values[11] ? parseInt(values[11], 10) : undefined
+          const temperature_c = shouldUseCsvWeather && values[12] ? parseFloat(values[12]) : undefined
+          const weather_condition = shouldUseCsvWeather ? values[13] || undefined : undefined
+          const wind_speed_mps = shouldUseCsvWeather && values[14] ? parseFloat(values[14]) : undefined
+          const wind_direction_deg = shouldUseCsvWeather && values[15] ? parseFloat(values[15]) : undefined
+          const wind_gust_mps = shouldUseCsvWeather && values[16] ? parseFloat(values[16]) : undefined
 
           if (isNaN(lat) || isNaN(lng)) continue
 
@@ -361,14 +365,15 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             stop_number: parseInt(values[0]) || i,
             city: values[1] || 'Unknown',
             country: values[2] || 'Unknown',
+            state_province: values[3] || undefined,
             lat,
             lng,
             utc_time,
-            local_time: values[9] || '',
+            local_time: values[10] || '',
             timestamp: parseUTCTime(utc_time, isLive), // Use real year for live mode
-            timezone: values[5] || undefined,
-            utc_offset: values[6] ? parseFloat(values[6]) : undefined,
-            utc_offset_rounded: values[7] ? parseFloat(values[7]) : undefined,
+            timezone: values[6] || undefined,
+            utc_offset: values[7] ? parseFloat(values[7]) : undefined,
+            utc_offset_rounded: values[8] ? parseFloat(values[8]) : undefined,
             population,
             temperature_c,
             weather_condition,
@@ -1324,6 +1329,43 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.375rem)',
           }}
         >
+          {/* Re-center button when camera is detached - centered above location */}
+          {!isCameraTracking && (
+            <div className="pb-2 flex justify-center">
+              <button
+                onClick={() => {
+                  setIsCameraTracking(true)
+                  // Reset zoom to default
+                  if (globeRef.current) {
+                    const currentPov = globeRef.current.pointOfView()
+                    globeRef.current.pointOfView({ 
+                      lat: currentPov?.lat ?? 0, 
+                      lng: currentPov?.lng ?? 0, 
+                      altitude: defaultCameraAltitude 
+                    }, 300)
+                  }
+                }}
+                className="flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black"
+                style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 10l-4 4m0 0l-4-4m4 4V3m0 18a9 9 0 110-18 9 9 0 010 18z"
+                  />
+                </svg>
+                RE-CENTER
+              </button>
+            </div>
+          )}
+
           {currentStop && (
             <div
               className={`pb-3 text-center text-[#33ff33] transition-opacity duration-300 ${statusFading ? 'opacity-0' : 'opacity-100'}`}
@@ -1372,43 +1414,6 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
               )}
             </div>
           )}
-
-        {/* Re-center button when camera is detached */}
-        {!isCameraTracking && (
-          <div className="py-2 flex justify-start">
-            <button
-              onClick={() => {
-                setIsCameraTracking(true)
-                // Reset zoom to default
-                if (globeRef.current) {
-                  const currentPov = globeRef.current.pointOfView()
-                  globeRef.current.pointOfView({ 
-                    lat: currentPov?.lat ?? 0, 
-                    lng: currentPov?.lng ?? 0, 
-                    altitude: defaultCameraAltitude 
-                  }, 300)
-                }
-              }}
-              className="flex items-center gap-2 border transition-colors text-xs px-2 py-1 font-mono bg-black/80 border-[#33ff33]/50 text-[#33ff33]/80 hover:bg-[#33ff33] hover:text-black"
-              style={{ textShadow: '0 0 5px rgba(51, 255, 51, 0.8)' }}
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 10l-4 4m0 0l-4-4m4 4V3m0 18a9 9 0 110-18 9 9 0 010 18z"
-                />
-              </svg>
-              RE-CENTER
-            </button>
-          </div>
-        )}
         
         <div className="text-[#33ff33]/60 text-xs border-t border-[#33ff33]/40" />
 

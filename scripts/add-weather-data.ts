@@ -80,6 +80,7 @@ interface SantaStop {
   stop_number: string;
   city: string;
   country: string;
+  state_province: string;
   lat: string;
   lng: string;
   timezone: string;
@@ -528,7 +529,7 @@ async function main() {
     const csvOutput = stringify(enrichedStops, {
       header: true,
       columns: [
-        "stop_number", "city", "country", "lat", "lng", "timezone",
+        "stop_number", "city", "country", "state_province", "lat", "lng", "timezone",
         "utc_offset", "utc_offset_rounded", "utc_time", "local_time", "population",
         "temperature_c", "weather_condition", "wind_speed_mps", "wind_direction_deg", "wind_gust_mps",
       ],
