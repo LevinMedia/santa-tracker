@@ -363,7 +363,6 @@ function HomeContent() {
   const [entries, setEntries] = useState<TerminalEntry[]>([])
   const [showPrompt, setShowPrompt] = useState(false)
   const [cursorVisible, setCursorVisible] = useState(true)
-  const [currentTime, setCurrentTime] = useState('')
   const [typingLine, setTypingLine] = useState<number | null>(null)
   const [typedChars, setTypedChars] = useState(0)
   const [userInput, setUserInput] = useState('')
@@ -611,17 +610,6 @@ function HomeContent() {
     const interval = setInterval(() => {
       setCursorVisible(v => !v)
     }, 530)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Clock
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date()
-      setCurrentTime(now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC')
-    }
-    updateTime()
-    const interval = setInterval(updateTime, 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -1403,11 +1391,6 @@ function HomeContent() {
 
         {/* Bottom padding for scroll (hidden during shutdown) */}
         {!isShutdown && <div className="h-20" />}
-      </div>
-
-      {/* Status bar at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-[#33ff33] text-black px-4 py-1 font-mono text-xs flex justify-end">
-        <span>{currentTime}</span>
       </div>
     </div>
   )
