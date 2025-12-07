@@ -1,16 +1,16 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'react'
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 import Snowfall from '@/components/Snowfall'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
-const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
-const ANNOUNCEMENT_TEXT_COMPLETE = "Thanks for visiting the Live Santa Tracker Mega 7000 HD. Santa's journey is complete for this year, but you can catch the replay below. We'll see you next December! As you celebrate this holiday season, consider sharing hope with a child in need. A gift to St. Jude supports life-saving care and research."
+const ANNOUNCEMENT_TEXT_COMPLETE = "Thanks for visiting the Live Santa Tracker Mega 7000 HD. Santa's journey is complete for this year, but you can catch the replay below. We'll see you next December! As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
 // Typewriter component for streaming text
 function TypewriterText({
@@ -75,7 +75,13 @@ function OptionsEntry({
 }) {
   const [typewriterDone, setTypewriterDone] = useState(!isActive)
   const [showCTA, setShowCTA] = useState(!isActive)
-  const [visibleButtons, setVisibleButtons] = useState(!isActive ? COMMAND_OPTIONS.length : 0)
+  
+  // Filter out 2025 replay when Santa is live
+  const filteredOptions = useMemo(() => 
+    COMMAND_OPTIONS.filter(option => !(isSantaLive && option.key === '5')),
+    [isSantaLive]
+  )
+  const [visibleButtons, setVisibleButtons] = useState(!isActive ? filteredOptions.length : 0)
   
   const handleTypewriterComplete = useCallback(() => {
     setTypewriterDone(true)
@@ -96,7 +102,7 @@ function OptionsEntry({
   
   // Stream in buttons one by one after CTA appears
   useEffect(() => {
-    if (!showCTA || !isActive || visibleButtons >= COMMAND_OPTIONS.length) return
+    if (!showCTA || !isActive || visibleButtons >= filteredOptions.length) return
     
     const buttonTimer = setTimeout(() => {
       setVisibleButtons(prev => prev + 1)
@@ -104,14 +110,21 @@ function OptionsEntry({
     }, 120)
     
     return () => clearTimeout(buttonTimer)
-  }, [showCTA, isActive, visibleButtons, onElementAppear])
+  }, [showCTA, isActive, visibleButtons, filteredOptions.length, onElementAppear])
+
+  // Adjust visibleButtons if filtered options change (e.g., when Santa goes live)
+  useEffect(() => {
+    if (visibleButtons > filteredOptions.length) {
+      setVisibleButtons(filteredOptions.length)
+    }
+  }, [filteredOptions.length, visibleButtons])
 
   // Call onAnnouncementComplete when all buttons are visible
   useEffect(() => {
-    if (isActive && visibleButtons >= COMMAND_OPTIONS.length) {
+    if (isActive && visibleButtons >= filteredOptions.length) {
       onAnnouncementComplete?.()
     }
-  }, [isActive, visibleButtons, onAnnouncementComplete])
+  }, [isActive, visibleButtons, filteredOptions.length, onAnnouncementComplete])
   
   return (
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
@@ -152,7 +165,7 @@ function OptionsEntry({
                 </button>
               </div>
             )}
-            {COMMAND_OPTIONS.slice(0, visibleButtons).map((option) => (
+            {filteredOptions.slice(0, visibleButtons).map((option) => (
               <div
                 key={`${entryId}-${option.key}`}
                 className="min-h-[1.5em]"
@@ -162,7 +175,11 @@ function OptionsEntry({
                   onClick={() => {
                     if (option.href === '#' || !isActive) return
                     trackCommandClick(option.key, option.label)
-                    onCommand(option.key)
+                    if (option.external) {
+                      window.open(option.href, '_blank', 'noopener,noreferrer')
+                    } else {
+                      onCommand(option.key)
+                    }
                   }}
                   className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap bg-black text-[#33ff33] ${
                     option.href === '#' || !isActive
@@ -227,6 +244,7 @@ interface CommandOption {
   label: string
   href: string
   delay: number
+  external?: boolean
 }
 
 interface TerminalEntry {
@@ -268,7 +286,7 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
-  { key: 'D', label: "DONATE TO ST. JUDE'S", href: '#', delay: 5200 },
+  { key: 'D', label: "DONATE TO MICHAEL J. FOX FOUNDATION", href: 'https://give.michaeljfox.org/fundraiser/6860349?is_new=true', delay: 5200, external: true },
   { key: '5', label: '2025 TRACKER REPLAY', href: '/map?flight=2025_santa_tracker&mode=replay', delay: 5300 },
   { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
   { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },

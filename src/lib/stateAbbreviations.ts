@@ -124,6 +124,22 @@ export function formatLocationWithState(city: string, stateProvince: string | un
 }
 
 /**
+ * Format location as "City, ST, Country" for US/Canada, or "City, Country" for others
+ */
+export function formatLocationWithStateAndCountry(city: string, stateProvince: string | undefined, country: string): string {
+  if (!stateProvince) return `${city}, ${country}`
+  
+  const abbr = getStateAbbreviation(stateProvince, country)
+  if (abbr && abbr !== stateProvince) {
+    // We have an abbreviation - include country
+    return `${city}, ${abbr}, ${country}`
+  }
+  
+  // No abbreviation available, return city and country
+  return `${city}, ${country}`
+}
+
+/**
  * Check if a search query matches a state/province (by name or abbreviation)
  */
 export function matchesStateProvince(stateProvince: string | undefined, country: string, query: string): boolean {

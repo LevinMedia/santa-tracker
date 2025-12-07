@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, startTransition } from 'react'
 import FlightLogPanel from './FlightLogPanel'
+import { formatLocationWithStateAndCountry } from '@/lib/stateAbbreviations'
 // Weather utilities no longer needed - simplified to direct Supabase calls
 
 interface FlightStop {
@@ -1123,7 +1124,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   const headingDisplay = legStats
     ? `${bearingToCompass(legStats.bearingDegrees)} (${Math.round(legStats.bearingDegrees)}°)`
     : '--'
-  const projectedStop = nextStop ? `${nextStop.city}, ${nextStop.country}` : '--'
+  const projectedStop = nextStop ? formatLocationWithStateAndCountry(nextStop.city, nextStop.state_province, nextStop.country) : '--'
   const etaDisplay = legStats ? formatEtaTime(legStats.etaMs) : '--'
   
   
@@ -1386,7 +1387,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
                     Last verified location
                   </div>
                   <div className="text-sm md:text-base font-semibold uppercase">
-                    {currentStop.city}, {currentStop.country}
+                    {formatLocationWithStateAndCountry(currentStop.city, currentStop.state_province, currentStop.country)}
                   </div>
                 </>
               )}
