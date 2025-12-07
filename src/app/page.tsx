@@ -5,6 +5,7 @@ import { useEffect, useState, useRef, useCallback, useMemo, Suspense } from 'rea
 import { trackCommandClick, trackFlightSelected } from '@/lib/analytics'
 import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 import Snowfall from '@/components/Snowfall'
+import PoppaElfChat from '@/components/PoppaElfChat'
 
 const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
@@ -171,7 +172,7 @@ function OptionsEntry({
               </div>
             )}
             {filteredOptions.slice(0, visibleButtons).map((option) => {
-              const isDisabled = option.href === '#' || !isActive
+              const isDisabled = (option.href === '#' && option.key !== 'P') || !isActive
               const isPrimaryReplay = option.key === primaryReplayKey && !isDisabled
 
               return (
@@ -301,23 +302,23 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
-  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5200 },
-  {
-    key: '5',
-    label: `Watch ${currentFlightYear} Santa tracker replay`,
-    href: `/map?flight=${currentFlightYear}_santa_tracker&mode=replay`,
-    delay: 5300,
-  },
   {
     key: 'R',
     label: `Watch ${previousFlightYear} Santa tracker replay`,
     href: `/map?flight=${previousFlightYear}_santa_tracker&mode=replay`,
-    delay: 5400,
+    delay: 5200,
   },
-  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5500, external: true },
-  { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
-  { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
-  { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
+  { key: 'P', label: 'ASK POPPA ELF (FAQ)', href: '#', delay: 5250 },
+  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5300, external: true },
+  { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5350 },
+  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5450 },
+  {
+    key: '5',
+    label: `Watch ${currentFlightYear} Santa tracker replay`,
+    href: `/map?flight=${currentFlightYear}_santa_tracker&mode=replay`,
+    delay: 5500,
+  },
+  { key: 'Q', label: 'QUIT', href: '/quit', delay: 5550 },
 ]
 
 const ABOUT_TEXT = `---
@@ -376,6 +377,7 @@ function HomeContent() {
   const [isSantaLive, setIsSantaLive] = useState(false)
   const [isFlightComplete, setIsFlightComplete] = useState(false)
   const [showAboutBack, setShowAboutBack] = useState(false)
+  const [isPoppaElfOpen, setIsPoppaElfOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const hasBootRun = useRef(false)
   const initialScrollDoneRef = useRef(false)
@@ -1081,6 +1083,9 @@ function HomeContent() {
 
         appendOptionsEntry()
         setShowPrompt(true)
+      } else if (normalized === 'P') {
+        setIsPoppaElfOpen(prev => !prev)
+        return
       } else if (normalized === 'Q') {
         setIsProcessing(true)
         setShowPrompt(false)
@@ -1193,6 +1198,9 @@ function HomeContent() {
       // Don't interfere with browser shortcuts (Cmd+R, Ctrl+R, etc.)
       if (e.metaKey || e.ctrlKey) return
       
+      // Don't process keyboard input when Poppa Elf chat is open
+      if (isPoppaElfOpen) return
+      
       if (!showPrompt) return
 
       if (e.key === 'Enter') {
@@ -1209,7 +1217,7 @@ function HomeContent() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleCommand, showPrompt, userInput])
+  }, [handleCommand, showPrompt, userInput, isPoppaElfOpen])
 
   return (
     <div className="w-full h-screen bg-black overflow-hidden relative">
@@ -1433,6 +1441,9 @@ function HomeContent() {
         {/* Bottom padding for scroll (hidden during shutdown) */}
         {!isShutdown && <div className="h-20" />}
       </div>
+
+      {/* Poppa Elf Chat */}
+      <PoppaElfChat isOpen={isPoppaElfOpen} onClose={() => setIsPoppaElfOpen(false)} />
     </div>
   )
 }
