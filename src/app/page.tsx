@@ -1013,20 +1013,61 @@ function HomeContent() {
 
         try {
           const shareLink = typeof window !== 'undefined' ? window.location.href : ''
-          await navigator.clipboard.writeText(shareLink)
+          const canUseWebShare =
+            typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+          const canUseClipboard =
+            typeof navigator !== 'undefined' &&
+            navigator.clipboard &&
+            typeof navigator.clipboard.writeText === 'function'
 
-          appendEntry({
-            id: `share-success-${Date.now()}`,
-            kind: 'text',
-            text: 'SANTA TRACKER LINK COPIED TO CLIPBOARD.',
-            className: 'mb-10'
-          })
+          let shared = false
+
+          if (canUseWebShare) {
+            try {
+              await navigator.share({
+                title: 'Santa Tracker',
+                text: 'Check out Santa Tracker!',
+                url: shareLink,
+              })
+
+              appendEntry({
+                id: `share-success-${Date.now()}`,
+                kind: 'text',
+                text: 'SHARE DIALOG OPENED. SEND SANTA TRACKER FROM YOUR DEVICE.',
+                className: 'mb-10',
+              })
+              shared = true
+            } catch (shareError) {
+              console.warn('Web Share failed, falling back to clipboard', shareError)
+            }
+          }
+
+          if (!shared && canUseClipboard) {
+            await navigator.clipboard.writeText(shareLink)
+
+            appendEntry({
+              id: `share-success-${Date.now()}`,
+              kind: 'text',
+              text: 'SANTA TRACKER LINK COPIED TO CLIPBOARD.',
+              className: 'mb-10'
+            })
+            shared = true
+          }
+
+          if (!shared) {
+            appendEntry({
+              id: `share-fail-${Date.now()}`,
+              kind: 'text',
+              text: 'FAILED TO SHARE LINK. PLEASE TRY AGAIN.',
+              className: 'mb-10',
+            })
+          }
         } catch (error) {
-          console.error('Failed to copy share link', error)
+          console.error('Failed to share link', error)
           appendEntry({
             id: `share-fail-${Date.now()}`,
             kind: 'text',
-            text: 'FAILED TO COPY LINK. PLEASE TRY AGAIN.',
+            text: 'FAILED TO SHARE LINK. PLEASE TRY AGAIN.',
             className: 'mb-10'
           })
         }
