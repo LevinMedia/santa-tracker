@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { trackPageView } from '@/lib/analytics'
 
 // Dynamically import the globe component to avoid SSR issues
 const GlobeMap = dynamic(() => import('@/components/GlobeMap'), {
@@ -43,6 +44,14 @@ export default function MapPageClient({ flightParam, mode = 'replay' }: MapPageC
   const dataFile = `/${flightLogName}.csv`
   const flightLogTitle = useMemo(() => getFlightTitle(flightLogName), [flightLogName])
   const isLiveMode = mode === 'live'
+
+  // Track page view with query parameters for analytics
+  useEffect(() => {
+    trackPageView('/map', {
+      flight: flightParam,
+      mode: mode || 'replay'
+    })
+  }, [flightParam, mode])
 
   // ESC key to go back
   useEffect(() => {

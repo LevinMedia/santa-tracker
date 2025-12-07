@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Switch } from '@headlessui/react'
 import { formatLocationWithState, matchesStateProvince } from '@/lib/stateAbbreviations'
+import { track } from '@vercel/analytics'
 
 interface FlightStop {
   stop_number: number
@@ -277,6 +278,19 @@ const FlightLogPanel = memo(function FlightLogPanel({
       }
     }
   }, [stops, searchParams, onSelectStop])
+
+  // Track stop detail views for analytics
+  useEffect(() => {
+    if (selectedStop) {
+      track('stop_detail_view', {
+        stop_number: selectedStop.stop_number,
+        city: selectedStop.city,
+        country: selectedStop.country,
+        state_province: selectedStop.state_province || '',
+        path: `/map?stop=${selectedStop.stop_number}`
+      })
+    }
+  }, [selectedStop])
 
   // Track previous isOpen state to detect fresh opens
   const prevIsOpenRef = useRef(isOpen)
