@@ -265,6 +265,9 @@ const BOOT_SEQUENCE: BootLine[] = [
   { text: 'LOAD "SANTA_TRACKER",8,1', delay: 800, isCommand: true },
 ]
 
+const currentFlightYear = Number(LIVE_FLIGHT_FILE.split('_')[0])
+const previousFlightYear = currentFlightYear - 1
+
 const MENU_ITEMS: MenuItem[] = [
   { type: 'hr', delay: 2200 },
   { text: '', delay: 2300 },
@@ -287,8 +290,18 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5200 },
-  { key: '5', label: '2025 TRACKER REPLAY', href: '/map?flight=2025_santa_tracker&mode=replay', delay: 5300 },
-  { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
+  {
+    key: '5',
+    label: `Watch ${currentFlightYear} Santa tracker replay`,
+    href: `/map?flight=${currentFlightYear}_santa_tracker&mode=replay`,
+    delay: 5300,
+  },
+  {
+    key: 'R',
+    label: `Watch ${previousFlightYear} Santa tracker replay`,
+    href: `/map?flight=${previousFlightYear}_santa_tracker&mode=replay`,
+    delay: 5400,
+  },
   { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5500, external: true },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
