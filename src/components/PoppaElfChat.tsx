@@ -45,14 +45,15 @@ const INITIAL_MESSAGES: Message[] = [
 
 export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [inputValue, setInputValue] = useState('')
+  const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [hasInitialized, setHasInitialized] = useState(false)
 
   // Load messages from sessionStorage when chat opens, or use initial dummy messages
   useEffect(() => {
-    if (isOpen && typeof window !== 'undefined') {
+    if (isOpen && typeof window !== 'undefined' && !hasInitialized) {
       const savedMessages = sessionStorage.getItem('poppa-elf-messages')
       if (savedMessages) {
         try {
@@ -61,11 +62,11 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             // Check if these are the initial dummy messages (by checking for dummy IDs)
             const hasDummyMessages = parsed.some((msg: any) => msg.id?.startsWith('dummy-'))
             if (hasDummyMessages) {
-              // These are the initial dummy messages, use them
               setMessages(parsed.map((msg: any) => ({
                 ...msg,
                 timestamp: new Date(msg.timestamp)
               })))
+              setHasInitialized(true)
               return
             }
             // User has added their own messages, use those
@@ -73,6 +74,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
               ...msg,
               timestamp: new Date(msg.timestamp)
             })))
+            setHasInitialized(true)
             return
           }
         } catch (e) {
@@ -81,21 +83,83 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       }
       // No saved messages or empty, use initial dummy messages
       setMessages(INITIAL_MESSAGES)
+      setHasInitialized(true)
     } else if (!isOpen) {
-      // Clear messages when closed to ensure fresh start next time
-      setMessages([])
+      // Reset initialization when closed
+      setHasInitialized(false)
     }
-  }, [isOpen])
+  }, [isOpen, hasInitialized])
 
   // Save messages to sessionStorage whenever they change
   useEffect(() => {
-    if (typeof window !== 'undefined' && messages.length > 0) {
-      sessionStorage.setItem('poppa-elf-messages', JSON.stringify(messages))
+    if (typeof window !== 'undefined' && messages.length > 0 && hasInitialized) {
+      const messagesWithTimestamps = messages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp.toISOString(),
+      }))
+      sessionStorage.setItem('poppa-elf-messages', JSON.stringify(messagesWithTimestamps))
     }
-  }, [messages])
+  }, [messages, hasInitialized])
 
-  // Don't clear messages on close - let them persist in sessionStorage
-  // They'll be cleared when the browser tab is closed (sessionStorage behavior)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isLoading) return
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date()
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setInput('')
+    setIsLoading(true)
+
+    try {
+      // Prepare messages for API (convert to format expected by API)
+      const apiMessages = [...messages, userMessage].map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }))
+
+      const response = await fetch('/api/poppa-elf/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: apiMessages }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from Poppa Elf')
+      }
+
+      const data = await response.json()
+      
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: data.content,
+        timestamp: new Date()
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+    } catch (error) {
+      console.error('Error sending message:', error)
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        role: 'assistant',
+        content: 'Ho ho ho! I apologize, but I encountered an error. Please try again!',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -108,35 +172,6 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [isOpen])
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!inputValue.trim() || isLoading) return
-
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: inputValue.trim(),
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMessage])
-    setInputValue('')
-    setIsLoading(true)
-
-    // TODO: Connect to API route
-    // For now, just add a placeholder response with markdown
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: 'Ho ho ho! I\'m **Poppa Elf**, and I\'m here to help!\n\n*API connection coming soon...*',
-        timestamp: new Date()
-      }
-      setMessages(prev => [...prev, assistantMessage])
-      setIsLoading(false)
-    }, 500)
-  }
 
   if (!isOpen) return null
 
@@ -240,20 +275,20 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
 
           {/* Input area */}
           <div className="flex-shrink-0 p-3 border-t border-[#33ff33]/30">
-            <form onSubmit={handleSend} className="flex gap-2">
+            <form onSubmit={handleSubmit} className="flex gap-2">
               <input
                 ref={inputRef}
                 type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask Poppa Elf..."
                 className="flex-1 bg-black border border-[#33ff33]/50 text-[#33ff33] text-sm px-3 py-2 focus:outline-none focus:border-[#33ff33]"
                 disabled={isLoading}
               />
               <button
                 type="submit"
-                disabled={!inputValue.trim() || isLoading}
-                className="bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!input.trim() || isLoading}
+                className="bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 SEND
               </button>
