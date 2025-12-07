@@ -338,7 +338,7 @@ SANTA CLAUS IS REAL.
 
 The data was scattered across NSA servers, MI6 archives, FSB cold storage, and a surprisingly unsecured Raspberry Pi in the basement of the Finnish Security Intelligence Service. But AI helped me piece it together—48,000+ verified delivery coordinates, precise timestamps, even weather conditions at each stop.
 
-The historical flight data you see here represents Santa's ACTUAL routes from previous years, reconstructed from classified satellite imagery, radar signatures, and one very cooperative reindeer who agreed to wear a GPS collar in exchange for extra carrots.
+The historical flight data you see here represents Santa's ACTUAL route from last year (2024), reconstructed from classified satellite imagery, radar signatures, and thousands of civilian eyewitness reports aggregated from social media.
 
 For the LIVE tracker, I've established unauthorized access to the combined spy satellite networks of the United States, China, and Russia. Turns out they've ALL been tracking Santa for decades—they just never compared notes. The Cold War was really about who could get Santa's gift list first.
 
