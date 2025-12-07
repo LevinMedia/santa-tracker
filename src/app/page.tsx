@@ -286,10 +286,10 @@ const MENU_ITEMS: MenuItem[] = [
 ]
 
 const COMMAND_OPTIONS: CommandOption[] = [
-  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5200, external: true },
+  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5200 },
   { key: '5', label: '2025 TRACKER REPLAY', href: '/map?flight=2025_santa_tracker&mode=replay', delay: 5300 },
   { key: 'R', label: '2024 TRACKER REPLAY', href: '/map?flight=2024_santa_tracker&mode=replay', delay: 5400 },
-  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5500 },
+  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5500, external: true },
   { key: 'T', label: 'TRACKER SYSTEM STATS', href: '#', delay: 5600 },
   { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5700 },
   { key: 'Q', label: 'QUIT', href: '/quit', delay: 5800 },
