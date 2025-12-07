@@ -135,7 +135,7 @@ function bearingToCompass(degrees: number): string {
 
 type StatusView = 'location' | 'speed' | 'heading' | 'next'
 
-const STATUS_ROTATE_INTERVAL_MS = 5000
+const STATUS_ROTATE_INTERVAL_MS = 5000 // 5 seconds
 const STATUS_FADE_DURATION_MS = 250
 const LONG_TRAVEL_DURATION_MS = 6 * 60 * 1000
 
@@ -961,10 +961,12 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     ? (liveIndex > 0 ? ((currentIndex + 1) / (liveIndex + 1)) * 100 : 0)
     : (stops.length > 0 ? ((currentIndex + 1) / stops.length) * 100 : 0)
 
+  const currentStopNumber = currentStop?.stop_number ?? null
+
   useEffect(() => {
     setStatusView('location')
     setStatusFading(false)
-  }, [currentStop?.stop_number])
+  }, [currentStopNumber])
 
   const elapsedMs = missionStart > 0 && currentSimTime
     ? Math.max(0, currentSimTime - missionStart)
@@ -1070,13 +1072,21 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   }, [currentStop, nextStop, currentSimTime, estimatedPosition])
 
   const shouldCycleStatus = useMemo(() => {
-    if (!currentStop || !nextStop || !legStats) return false
+    if (!currentStop) return false
 
-    const isAnimating = isLive ? isFollowingLive : isPlaying
+    // In live mode, always cycle through status views every 5 seconds
+    if (isLive) {
+      return true
+    }
+
+    // In replay mode, only cycle for long travel legs
+    if (!nextStop || !legStats) return false
+
+    const isAnimating = isPlaying
     if (!isAnimating || travelProgress <= 0) return false
 
     return legStats.legDurationMs >= LONG_TRAVEL_DURATION_MS
-  }, [currentStop, nextStop, legStats, isLive, isFollowingLive, isPlaying, travelProgress])
+  }, [currentStop, nextStop, legStats, isLive, isPlaying, travelProgress])
 
   useEffect(() => {
     if (!shouldCycleStatus) {
@@ -1084,6 +1094,9 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       setStatusFading(false)
       return
     }
+
+    // Use 5 seconds for both live and replay modes
+    const cycleInterval = STATUS_ROTATE_INTERVAL_MS
 
     let fadeTimeout: ReturnType<typeof setTimeout> | undefined
     const interval = setInterval(() => {
@@ -1096,13 +1109,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         })
         setStatusFading(false)
       }, STATUS_FADE_DURATION_MS)
-    }, STATUS_ROTATE_INTERVAL_MS)
+    }, cycleInterval)
 
     return () => {
       clearInterval(interval)
       if (fadeTimeout) clearTimeout(fadeTimeout)
     }
-  }, [shouldCycleStatus])
+  }, [shouldCycleStatus, currentStopNumber])
 
   useEffect(() => {
     const previousStatus = prevStatusViewRef.current

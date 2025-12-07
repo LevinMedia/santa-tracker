@@ -178,7 +178,7 @@ function OptionsEntry({
                     if (option.external) {
                       window.open(option.href, '_blank', 'noopener,noreferrer')
                     } else {
-                      onCommand(option.key)
+                    onCommand(option.key)
                     }
                   }}
                   className={`flex w-full items-center justify-start text-left px-3 py-2 tracking-[0.15em] uppercase transition-colors duration-150 whitespace-nowrap bg-black text-[#33ff33] ${
