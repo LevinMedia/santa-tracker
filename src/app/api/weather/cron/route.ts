@@ -41,12 +41,14 @@ function parseCSV(csvContent: string): SantaStop[] {
     }
     values.push(current)
     
-    const utcTime = values[8]
+    // CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone,
+    //              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, 11-population
+    const utcTime = values[9]
     const timestamp = new Date(utcTime.replace(' ', 'T') + 'Z').getTime()
     
     stops.push({
       stop_number: parseInt(values[0]),
-      utc_offset_rounded: parseInt(values[7]),
+      utc_offset_rounded: parseInt(values[8]),
       utc_time: utcTime,
       timestamp,
     })

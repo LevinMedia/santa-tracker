@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
     })
     
     // Update lines with weather data
-    // CSV columns: 0-stop_number, 1-city, 2-country, 3-lat, 4-lng, 5-timezone, 
-    //              6-utc_offset, 7-utc_offset_rounded, 8-utc_time, 9-local_time, 10-population
-    //              11-temperature_c, 12-weather_condition, 13-wind_speed_mps, 14-wind_direction_deg, 15-wind_gust_mps
+    // CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone, 
+    //              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, 11-population
+    //              12-temperature_c, 13-weather_condition, 14-wind_speed_mps, 15-wind_direction_deg, 16-wind_gust_mps
     
     let updatedCount = 0
     const outputLines = [lines[0]] // Keep header
@@ -82,11 +82,11 @@ export async function POST(request: NextRequest) {
       
       if (weather) {
         // Update weather columns
-        values[11] = weather.temperature_c?.toString() || ''
-        values[12] = weather.weather_condition ? `"${weather.weather_condition}"` : ''
-        values[13] = weather.wind_speed_mps?.toString() || ''
-        values[14] = weather.wind_direction_deg?.toString() || ''
-        values[15] = weather.wind_gust_mps?.toString() || ''
+        values[12] = weather.temperature_c?.toString() || ''
+        values[13] = weather.weather_condition ? `"${weather.weather_condition}"` : ''
+        values[14] = weather.wind_speed_mps?.toString() || ''
+        values[15] = weather.wind_direction_deg?.toString() || ''
+        values[16] = weather.wind_gust_mps?.toString() || ''
         updatedCount++
       }
       
