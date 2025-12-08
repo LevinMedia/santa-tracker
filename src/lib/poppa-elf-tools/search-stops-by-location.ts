@@ -11,7 +11,7 @@ import { searchStopsByLocation } from '@/lib/flight-data'
  */
 export const searchStopsByLocationTool = tool({
   name: 'search_stops_by_location',
-  description: `Search for stops in Santa's 2024 flight by city, country, or state/province. Use this when the user asks about when Santa visited a specific location (e.g., "When was Santa in New York?", "What stops were in France?", "When did Santa visit California?"). The search uses exact matching (case-insensitive).`,
+  description: `Search for stops in Santa's 2024 flight by city, country, or state/province using exact matching (case-insensitive). Use this when the user asks about when Santa visited a specific location and you know it's likely in the exact stop list (e.g., "When was Santa in New York?", "What stops were in France?"). IMPORTANT: If this returns "No stops found", use find_nearest_stop_by_location_name instead - it will automatically geocode and find the nearest stop.`,
   parameters: {
     type: 'object' as const,
     properties: {
