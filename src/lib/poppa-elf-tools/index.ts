@@ -8,4 +8,5 @@
 export { getStopByNumberTool } from './get-stop-by-number'
 export { searchStopsByLocationTool } from './search-stops-by-location'
 export { getStopsByTimeTool } from './get-stops-by-time'
+export { calculateStatisticsTool } from './calculate-statistics'
 

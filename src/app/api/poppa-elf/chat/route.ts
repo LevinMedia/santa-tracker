@@ -1,6 +1,6 @@
 import { Agent, run } from '@openai/agents'
 import { NextRequest } from 'next/server'
-import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool } from '@/lib/poppa-elf-tools'
+import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool } from '@/lib/poppa-elf-tools'
 
 // Poppa Elf system prompt
 const POPPA_ELF_INSTRUCTIONS = `SYSTEM PROMPT — "Poppa Elf" (Santa Tracker Agent)
@@ -119,7 +119,7 @@ When you have access to tools or data about Santa's 2024 flight, use them to pro
 const poppaElfAgent = new Agent({
   name: 'Poppa Elf',
   instructions: POPPA_ELF_INSTRUCTIONS,
-  tools: [getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool],
+  tools: [getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool],
 })
 
 export async function POST(req: NextRequest) {
