@@ -55,14 +55,14 @@ function parseCSVLine(line: string): string[] {
 }
 
 // Parse UTC time string to timestamp
-// In replay mode, we force the year to current year so timestamps work for playback
+// In replay mode, we force the year to the flight year so timestamps match the dataset
 // In live mode, we use the actual year from the data
-function parseUTCTime(timeStr: string, useRealYear: boolean = false): number {
+function parseUTCTime(timeStr: string, useRealYear: boolean = false, overrideYear?: number): number {
   const date = new Date(timeStr.replace(' ', 'T') + 'Z')
 
   if (!isNaN(date.getTime()) && !useRealYear) {
-    // Force current year to align replay data with current time calculations
-    date.setUTCFullYear(new Date().getFullYear())
+    // Force provided flight year (or current year as a fallback) to align replay data with playback calculations
+    date.setUTCFullYear(overrideYear ?? new Date().getFullYear())
   }
 
   return date.getTime()
@@ -372,7 +372,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
             lng,
             utc_time,
             local_time: values[10] || '',
-            timestamp: parseUTCTime(utc_time, isLive), // Use real year for live mode
+            timestamp: parseUTCTime(utc_time, isLive, flightYear), // Use flight year for replay, real year for live
             timezone: values[6] || undefined,
             utc_offset: values[7] ? parseFloat(values[7]) : undefined,
             utc_offset_rounded: values[8] ? parseFloat(values[8]) : undefined,
