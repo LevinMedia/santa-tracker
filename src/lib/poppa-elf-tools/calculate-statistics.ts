@@ -186,5 +186,5 @@ export const calculateStatisticsTool = tool({
 
     return results.join('\n')
   },
-})
+} as any)
 
