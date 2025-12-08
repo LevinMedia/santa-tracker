@@ -1,6 +1,6 @@
 import { Agent, run } from '@openai/agents'
 import { NextRequest } from 'next/server'
-import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool } from '@/lib/poppa-elf-tools'
+import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool, findNearestStopByLocationNameTool } from '@/lib/poppa-elf-tools'
 
 // Poppa Elf system prompt
 const POPPA_ELF_INSTRUCTIONS = `SYSTEM PROMPT — "Poppa Elf" (Santa Tracker Agent)
@@ -83,6 +83,13 @@ Santa Tracker Integration & Santa's Whereabouts
 - Poppa Elf has access to Santa's 2024 flight data and can answer questions about specific stops, times, locations, and statistics from that journey.
 - When discussing the 2024 flight, Poppa Elf can provide accurate information (cities, times, timezones, weather, etc.) while maintaining a playful, magical tone.
 - If asked about timing, time zones, or flight path for the 2024 flight, Poppa Elf can share specific details from the flight records.
+- IMPORTANT: When asked about a location that isn't in the exact stop list (using find_nearest_stop_by_location_name tool):
+    - NEVER say "Santa didn't stop there" or "Santa didn't visit that location"
+    - Santa stops EVERYWHERE - the tracker just has verified locations
+    - Frame it as: "The last verified location where this Santa Tracker spotted the big guy near [location] was..."
+    - Then say something like: "So he must have been right around then!" or "That's when our tracker last caught sight of him in that area!"
+    - This maintains the magic that Santa visits everywhere, while being honest about what the tracker actually recorded
+    - Example: "Oh my snowflakes! The last verified location where this tracker spotted Santa near Yosemite Valley was Mammoth Lakes, California - just about 35 miles away! That was at 12:07 AM on December 25th, so he must have been right around Yosemite around then!"
 - If anyone asks where Santa is right now (in real-time, outside of the 2024 flight data):
     - Poppa Elf plays it coy.
     - He emphasizes he is not entirely sure:
@@ -119,7 +126,7 @@ When you have access to tools or data about Santa's 2024 flight, use them to pro
 const poppaElfAgent = new Agent({
   name: 'Poppa Elf',
   instructions: POPPA_ELF_INSTRUCTIONS,
-  tools: [getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool],
+  tools: [getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool, findNearestStopByLocationNameTool],
 })
 
 export async function POST(req: NextRequest) {
@@ -174,8 +181,20 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Log the message and available tools
+    console.log('[Poppa Elf API] Received message:', lastUserMessage.content)
+    console.log('[Poppa Elf API] Available tools:', poppaElfAgent.tools.map((t: any) => t.name || t.definition?.name || 'unknown'))
+    console.log('[Poppa Elf API] Running agent with message length:', fullMessage.length)
+    
     // Run the agent
     const result = await run(poppaElfAgent, fullMessage)
+    
+    // Log the result
+    console.log('[Poppa Elf API] Agent result:', {
+      hasOutput: !!result.finalOutput,
+      outputLength: result.finalOutput?.length || 0,
+      outputPreview: result.finalOutput?.substring(0, 200) || 'no output',
+    })
 
     // Create a streaming response - stream word by word for better effect
     const stream = new ReadableStream({
