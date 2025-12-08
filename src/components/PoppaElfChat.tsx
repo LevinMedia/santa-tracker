@@ -428,9 +428,9 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           {/* Messages area */}
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto min-h-0 p-4 pb-24 md:pb-4 scrollbar-thin"
+            className="flex-1 overflow-y-auto min-h-0 p-4 pb-6 md:pb-4 scrollbar-thin"
           >
-            <div className="flex flex-col space-y-4 min-h-full justify-end">
+            <div className="flex flex-col space-y-4">
               {/* Intro sequence - only show connecting animation while connecting */}
               {showIntro && introStep === 'connecting' && (
                 <div className="py-1 self-start">
