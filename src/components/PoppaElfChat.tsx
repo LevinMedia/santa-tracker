@@ -120,7 +120,9 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
         })
 
         if (!response.ok) {
-          throw new Error('Failed to get greeting')
+          const errorText = await response.text().catch(() => 'Unknown error')
+          console.error(`Failed to get greeting: ${response.status} ${response.statusText}`, errorText)
+          throw new Error(`Failed to get greeting: ${response.status} ${response.statusText}`)
         }
 
         // Stream the greeting and update the message in real-time
@@ -149,10 +151,11 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           reader.releaseLock()
         }
         
-        finalGreetingContent = accumulatedContent || 'Ho ho ho! I\'m Poppa Elf, the oldest and wisest elf at the North Pole. How can I help you today?'
+        finalGreetingContent = accumulatedContent || 'Well hello there! I\'m Poppa Elf, the oldest and wisest elf at the North Pole. How can I help you today?'
       } catch (error) {
+        // Log error but don't show it to the user - use fallback greeting instead
         console.error('Error getting greeting:', error)
-        finalGreetingContent = 'Ho ho ho! I\'m Poppa Elf, the oldest and wisest elf at the North Pole. How can I help you today?'
+        finalGreetingContent = 'Well hello there! I\'m Poppa Elf, the oldest and wisest elf at the North Pole. How can I help you today?'
         setGreetingMessage(finalGreetingContent)
         
         // Update message with error fallback
@@ -245,7 +248,10 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
 
     try {
       // Prepare messages for API (convert to format expected by API)
-      const apiMessages = [...messages, userMessage].map(msg => ({
+      // Limit to last 4 messages (2 exchanges) to avoid token limit issues
+      // The backend will further limit if needed
+      const recentMessages = [...messages, userMessage].slice(-4)
+      const apiMessages = recentMessages.map(msg => ({
         role: msg.role,
         content: msg.content,
       }))
@@ -259,7 +265,25 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to get response from Poppa Elf')
+        const errorText = await response.text().catch(() => 'Unknown error')
+        let errorMessage = 'Failed to get response from Poppa Elf'
+        
+        if (response.status === 429) {
+          errorMessage = 'The request is too large. Please try a shorter message or wait a moment.'
+        } else if (response.status === 500) {
+          try {
+            const errorData = JSON.parse(errorText)
+            if (errorData.message?.includes('rate_limit') || errorData.message?.includes('too large')) {
+              errorMessage = 'The request is too large. Please try a shorter message or wait a moment.'
+            } else if (errorData.message) {
+              errorMessage = `Error: ${errorData.message}`
+            }
+          } catch {
+            // If parsing fails, use default message
+          }
+        }
+        
+        throw new Error(errorMessage)
       }
 
       // Handle streaming response
@@ -304,9 +328,10 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       }
     } catch (error) {
       console.error('Error sending message:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again!'
       setMessages(prev => prev.map(msg => 
         msg.id === assistantMessageId
-          ? { ...msg, content: 'Ho ho ho! I apologize, but I encountered an error. Please try again!' }
+          ? { ...msg, content: `Oh my snowflakes! I apologize, but ${errorMessage}` }
           : msg
       ))
       setIsLoading(false)
@@ -407,7 +432,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             
             {!showIntro && messages.length === 0 && (
               <div className="text-center text-[#66ff66]/60 text-sm mt-8">
-                <p className="mb-2">Ho ho ho! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
+                <p className="mb-2">Well hello there! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
                 <p>Ask me anything about Santa's 2024 flight!</p>
               </div>
             )}

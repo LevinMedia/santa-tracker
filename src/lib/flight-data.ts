@@ -156,3 +156,138 @@ export function searchStopsByLocation(options: {
   })
 }
 
+/**
+ * Map of common US timezone abbreviations to UTC offsets (standard time)
+ */
+const US_TIMEZONE_OFFSETS: Record<string, number> = {
+  'EST': -5,  // Eastern Standard Time
+  'EDT': -4,  // Eastern Daylight Time
+  'CST': -6,  // Central Standard Time
+  'CDT': -5,  // Central Daylight Time
+  'MST': -7,  // Mountain Standard Time
+  'MDT': -6,  // Mountain Daylight Time
+  'PST': -8,  // Pacific Standard Time
+  'PDT': -7,  // Pacific Daylight Time
+  'AKST': -9, // Alaska Standard Time
+  'AKDT': -8, // Alaska Daylight Time
+  'HST': -10, // Hawaii Standard Time
+  'HAST': -10, // Hawaii-Aleutian Standard Time
+}
+
+/**
+ * US timezone UTC offsets (standard time) for searching all US timezones
+ */
+const US_TIMEZONE_OFFSETS_LIST = [-5, -6, -7, -8, -9, -10] // EST, CST, MST, PST, AKST, HST
+
+/**
+ * Parse timezone string to UTC offset(s)
+ * @param timezoneStr Timezone string (e.g., "EST", "UTC-5", "PST", "USA", "US")
+ * @returns Array of UTC offsets to search, or null if invalid
+ */
+export function parseTimezone(timezoneStr: string): number[] | null {
+  const tz = timezoneStr.trim().toUpperCase()
+  
+  // Handle "USA" or "US" - return all US timezone offsets
+  if (tz === 'USA' || tz === 'US' || tz === 'UNITED STATES') {
+    return US_TIMEZONE_OFFSETS_LIST
+  }
+  
+  // Handle common US timezone abbreviations
+  if (US_TIMEZONE_OFFSETS[tz]) {
+    return [US_TIMEZONE_OFFSETS[tz]]
+  }
+  
+  // Handle UTC offsets (e.g., "UTC-5", "UTC+8", "-5", "+8")
+  const utcMatch = tz.match(/^UTC?([+-]?\d+)$/) || tz.match(/^([+-]?\d+)$/)
+  if (utcMatch) {
+    const offset = parseInt(utcMatch[1], 10)
+    return [offset]
+  }
+  
+  // Handle "UTC" explicitly
+  if (tz === 'UTC' || tz === 'GMT') {
+    return [0]
+  }
+  
+  return null
+}
+
+/**
+ * Parse time string to hour (0-23)
+ * @param timeStr Time string (e.g., "10pm", "10:00 PM", "22:00", "10")
+ * @returns Hour (0-23) or null if invalid
+ */
+export function parseTime(timeStr: string): number | null {
+  const time = timeStr.trim().toLowerCase()
+  
+  // Handle formats like "10pm", "10 PM", "10:00pm", "10:00 PM"
+  const pmMatch = time.match(/(\d{1,2})(?::(\d{2}))?\s*(?:pm|p\.?m\.?)/)
+  if (pmMatch) {
+    let hour = parseInt(pmMatch[1], 10)
+    if (hour === 12) hour = 12 // 12pm stays 12
+    else if (hour < 12) hour += 12 // 1pm-11pm become 13-23
+    return hour
+  }
+  
+  // Handle formats like "10am", "10 AM", "10:00am", "10:00 AM"
+  const amMatch = time.match(/(\d{1,2})(?::(\d{2}))?\s*(?:am|a\.?m\.?)/)
+  if (amMatch) {
+    let hour = parseInt(amMatch[1], 10)
+    if (hour === 12) hour = 0 // 12am becomes 0
+    return hour
+  }
+  
+  // Handle 24-hour format (e.g., "22:00", "22", "10:30")
+  const hourMatch = time.match(/^(\d{1,2})(?::(\d{2}))?$/)
+  if (hourMatch) {
+    const hour = parseInt(hourMatch[1], 10)
+    if (hour >= 0 && hour <= 23) {
+      return hour
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Search stops by UTC time (hour only)
+ * @param utcHour Hour in UTC (0-23)
+ * @returns Array of matching flight stops
+ */
+export function searchStopsByUTCTime(utcHour: number): FlightStop[] {
+  const stops = loadFlightData()
+  
+  return stops.filter(stop => {
+    // Parse the UTC time to get the hour
+    // Format: "2024-12-24 23:31:45"
+    const timeMatch = stop.utc_time.match(/\d{4}-\d{2}-\d{2}\s+(\d{2}):\d{2}:\d{2}/)
+    if (!timeMatch) {
+      return false
+    }
+    
+    const stopUTCHour = parseInt(timeMatch[1], 10)
+    return stopUTCHour === utcHour
+  })
+}
+
+/**
+ * Convert local time to UTC hour
+ * @param localHour Hour in local timezone (0-23)
+ * @param utcOffset UTC offset (e.g., -8 for PST, -5 for EST)
+ * @returns UTC hour (0-23), handling day rollover
+ */
+export function localTimeToUTC(localHour: number, utcOffset: number): number {
+  // UTC = local - offset
+  // e.g., 10pm PST (22:00, offset -8) = 22 - (-8) = 30 = 6am next day (6)
+  let utcHour = localHour - utcOffset
+  
+  // Handle day rollover
+  if (utcHour < 0) {
+    utcHour += 24
+  } else if (utcHour >= 24) {
+    utcHour -= 24
+  }
+  
+  return utcHour
+}
+

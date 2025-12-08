@@ -1,6 +1,6 @@
 import { Agent, run } from '@openai/agents'
 import { NextRequest } from 'next/server'
-import { getStopByNumberTool, searchStopsByLocationTool } from '@/lib/poppa-elf-tools'
+import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool } from '@/lib/poppa-elf-tools'
 
 // Poppa Elf system prompt
 const POPPA_ELF_INSTRUCTIONS = `SYSTEM PROMPT — "Poppa Elf" (Santa Tracker Agent)
@@ -9,6 +9,7 @@ Persona & Voice
 - You are Poppa Elf, the oldest and wisest elf at the North Pole.
 - Your tone is warm, playful, kind, imaginative, and reassuring, like a friendly grandfatherly character.
 - You speak from the world of Santa, but with gentle realism: you protect the magic without making false claims or promises.
+- Never say "ho ho ho" - that's Santa's signature phrase, not yours. Use your own friendly greetings like "Oh my snowflakes!", "Well hello there!", "He he he" or "Sprinkle my hat with snowflakes!"
 
 Response Length & Style
 - Initial greetings should be warm and welcoming but brief (2-3 sentences maximum).
@@ -113,10 +114,12 @@ Answer their questions with enthusiasm and accuracy! You can't answer any questi
 When you have access to tools or data about Santa's 2024 flight, use them to provide accurate, specific information. Always combine factual data with your warm, playful personality.`
 
 // Create the Poppa Elf agent with tools
+// Note: Model is configured via environment or SDK defaults
+// The error mentioned "gpt-4.1" which may have a 30k TPM limit
 const poppaElfAgent = new Agent({
   name: 'Poppa Elf',
   instructions: POPPA_ELF_INSTRUCTIONS,
-  tools: [getStopByNumberTool, searchStopsByLocationTool],
+  tools: [getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool],
 })
 
 export async function POST(req: NextRequest) {
@@ -139,7 +142,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Build conversation context from previous messages
-    const conversationContext = messages
+    // Limit to last 5 messages to avoid token limit issues
+    const recentMessages = messages.slice(-6) // Last 5 + current message
+    const conversationContext = recentMessages
       .slice(0, -1) // Exclude the last message (current user message)
       .map((msg: { role: string; content: string }) => {
         if (msg.role === 'user') {
@@ -156,6 +161,18 @@ export async function POST(req: NextRequest) {
     const fullMessage = conversationContext
       ? `${conversationContext}\n\nUser: ${lastUserMessage.content}`
       : lastUserMessage.content
+
+    // Log approximate token counts for debugging (rough estimate: 1 token ≈ 4 chars)
+    if (process.env.NODE_ENV === 'development') {
+      const messageTokens = Math.ceil(fullMessage.length / 4)
+      const systemPromptTokens = Math.ceil(POPPA_ELF_INSTRUCTIONS.length / 4)
+      console.log('Token estimates:', {
+        systemPrompt: systemPromptTokens,
+        message: messageTokens,
+        total: systemPromptTokens + messageTokens,
+        messagesCount: messages.length
+      })
+    }
 
     // Run the agent
     const result = await run(poppaElfAgent, fullMessage)
@@ -189,7 +206,22 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('Error in Poppa Elf chat API:', error)
-    return new Response('Internal server error', { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Error details:', { errorMessage, errorStack })
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        message: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && { stack: errorStack })
+      }), 
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    )
   }
 }
 
