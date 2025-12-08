@@ -359,8 +359,8 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       <div
         className={`
           fixed z-[1002] font-mono
-          left-0 right-0 top-0 bottom-0 h-screen md:h-full
-          md:left-auto md:right-0 md:top-0 md:w-96
+          left-0 right-0 top-0 bottom-0 h-[100dvh] max-h-[100dvh]
+          md:h-full md:max-h-full md:left-auto md:right-0 md:top-0 md:w-96
           transform transition-transform duration-300 ease-out
           ${isOpen ? 'translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-x-full'}
         `}
@@ -395,7 +395,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           </div>
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
+          <div className="flex-1 overflow-y-auto p-4 pb-24 md:pb-4 space-y-4 flex flex-col">
             {/* Intro sequence - only show connecting animation while connecting */}
             {showIntro && introStep === 'connecting' && (
               <div className="py-1 self-start">
@@ -474,7 +474,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           </div>
 
           {/* Input area */}
-          <div className="flex-shrink-0 p-3 border-t border-[#33ff33]/30">
+          <div className="flex-shrink-0 p-3 border-t border-[#33ff33]/30 sticky bottom-0 left-0 right-0 bg-black">
             <form onSubmit={handleSubmit} className="flex gap-2">
               <input
                 ref={inputRef}
