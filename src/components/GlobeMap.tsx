@@ -779,13 +779,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         const currentScene = globeRef.current?.scene()
         if (!currentScene) return
         
-        // Add ambient light for base illumination
-        const ambient = new AmbientLight(0x3f4a5f, 0.85)
+        // Add ambient light for base illumination - increased for more even lighting
+        const ambient = new AmbientLight(0xffffff, 3.0)
         ambient.name = 'ambientLight'
         currentScene.add(ambient)
-
-        // Add directional light for sun
-        const directional = new DirectionalLight(0xffffee, 1.8)
+        
+        // Add directional light for sun - reduced intensity for more even lighting
+        const directional = new DirectionalLight(0xffffff, 0.6)
         directional.name = 'sunLight'
         currentScene.add(directional)
         
@@ -814,7 +814,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
     }
   }, [globeReady, currentSimTime])
 
-  // Brighten the globe texture to make land/ocean contrast clearer
+  // Increase texture brightness
   useEffect(() => {
     if (!globeRef.current || !globeReady) return
 
@@ -822,11 +822,8 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       const material = globeRef.current?.globeMaterial?.() as MeshPhongMaterial | undefined
       if (!material) return
 
-      material.color = new Color('#f7faff')
-      material.emissive = new Color('#1f2a44')
-      material.emissiveIntensity = 0.75
-      material.specular = new Color('#6d88c7')
-      material.shininess = 18
+      // Increase brightness by adjusting color multiplier
+      material.color = new Color(2, 2, 2) // Brighten by 30%
       material.needsUpdate = true
     })
   }, [globeReady])
