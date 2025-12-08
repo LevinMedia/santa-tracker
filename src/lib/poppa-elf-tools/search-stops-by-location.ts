@@ -32,6 +32,7 @@ export const searchStopsByLocationTool = tool({
     additionalProperties: false as const,
   },
   strict: false,
+} as any)
   execute: async (input: unknown) => {
     const args = input as { city?: string; country?: string; state_province?: string }
     const { city, country, state_province } = args
