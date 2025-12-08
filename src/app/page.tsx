@@ -7,7 +7,7 @@ import { LIVE_FLIGHT_FILE, FLIGHT_START, FLIGHT_END } from '@/lib/flight-window'
 import Snowfall from '@/components/Snowfall'
 import PoppaElfChat from '@/components/PoppaElfChat'
 
-const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
+const ANNOUNCEMENT_TEXT = "2025 Santa Tracker will activate as soon as elevated levels of magic are detected at or around the North Pole on December 25th, 2025. Check back then! Until then, catch the 2024 replay below, or chat with Poppa Elf, the wise old elf who helps answer questions about Santa's journey.\n\nLast but certainly not least, as you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
 const ANNOUNCEMENT_TEXT_LIVE = "As you celebrate this holiday season, consider supporting families affected by Parkinson's Disease. A gift to the Michael J. Fox Foundation funds critical research and brings hope for a cure."
 
@@ -327,7 +327,7 @@ ABOUT THE SANTA TRACKER MEGA 7000 HD
 
 ---
 
-Hi, I'm David, creator of this site. I'm a software designer, and as of late, an AI enthusiast. People are rightfully nervous about AI and what it means for our future. The doomers say it will destroy us. The accelerationists say it will save us. The truth, as always, is probably somewhere in between.
+Hi, I'm David, creator of this site. I'm a software designer, and as of late, a vibe coding enthusiast. (Developting software totally with AI) People are rightfully nervous about AI and what it means for our future. The doomers say it will destroy us. The accelerationists say it will save us. The truth, as always, is probably somewhere in between.
 
 But here's the thing—I believe AI can be used for GOOD.
 
@@ -339,7 +339,7 @@ SANTA CLAUS IS REAL.
 
 The data was scattered across NSA servers, MI6 archives, FSB cold storage, and a surprisingly unsecured Raspberry Pi in the basement of the Finnish Security Intelligence Service. But AI helped me piece it together—48,000+ verified delivery coordinates, precise timestamps, even weather conditions at each stop.
 
-The historical flight data you see here represents Santa's ACTUAL route from last year (2024), reconstructed from classified satellite imagery, radar signatures, and thousands of civilian eyewitness reports aggregated from social media.
+The historical flight data you see here represents Santa's ACTUAL route from last year (2024), reconstructed from classified satellite imagery, radar signatures, and thousands of civilian eyewitness reports aggregated from social media. Now, obviously, Santa got wind of what I'd done, but he thought it was pretty funny. Rather than putting me on the naughty list, he voulenteered Poppa Elf to help answer questions from vistors on this site.
 
 For the LIVE tracker, I've established unauthorized access to the combined spy satellite networks of the United States, China, and Russia. Turns out they've ALL been tracking Santa for decades—they just never compared notes. The Cold War was really about who could get Santa's gift list first.
 
@@ -351,7 +351,7 @@ Ho ho ho.
 
 Built with love, caffeine, and questionable use of military intelligence. Created by a human, assisted by AI.
 
-Want a peek under the hood? Check out all the code on [GITHUB].
+[GITHUB] IYKYK.
 
 ---`
 
