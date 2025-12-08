@@ -28,11 +28,10 @@ export const searchStopsByLocationTool = tool({
         description: 'The state or province name to search for (exact match, case-insensitive). Optional if searching by city or country.',
       },
     },
-    required: [],
+    required: [] as const,
     additionalProperties: false as const,
   },
-  strict: false,
-} as any)
+  strict: true,
   execute: async (input: unknown) => {
     const args = input as { city?: string; country?: string; state_province?: string }
     const { city, country, state_province } = args
