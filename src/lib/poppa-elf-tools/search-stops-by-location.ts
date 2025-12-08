@@ -31,7 +31,7 @@ export const searchStopsByLocationTool = tool({
     required: [] as const,
     additionalProperties: false as const,
   },
-  strict: true,
+  strict: false,
   execute: async (input: unknown) => {
     const args = input as { city?: string; country?: string; state_province?: string }
     const { city, country, state_province } = args
@@ -86,5 +86,5 @@ export const searchStopsByLocationTool = tool({
     
     return response.trim()
   },
-})
+} as any)
 
