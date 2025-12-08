@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo, startTransition } from 'react'
 import FlightLogPanel from './FlightLogPanel'
 import { formatLocationWithStateAndCountry } from '@/lib/stateAbbreviations'
+import type { MeshPhongMaterial } from 'three'
 // Weather utilities no longer needed - simplified to direct Supabase calls
 
 interface FlightStop {
@@ -779,12 +780,12 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
         if (!currentScene) return
         
         // Add ambient light for base illumination
-        const ambient = new AmbientLight(0x333333, 0.5)
+        const ambient = new AmbientLight(0x3f4a5f, 0.85)
         ambient.name = 'ambientLight'
         currentScene.add(ambient)
-        
+
         // Add directional light for sun
-        const directional = new DirectionalLight(0xffffee, 1.5)
+        const directional = new DirectionalLight(0xffffee, 1.8)
         directional.name = 'sunLight'
         currentScene.add(directional)
         
@@ -812,6 +813,23 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       )
     }
   }, [globeReady, currentSimTime])
+
+  // Brighten the globe texture to make land/ocean contrast clearer
+  useEffect(() => {
+    if (!globeRef.current || !globeReady) return
+
+    import('three').then(({ Color }) => {
+      const material = globeRef.current?.globeMaterial?.() as MeshPhongMaterial | undefined
+      if (!material) return
+
+      material.color = new Color('#f7faff')
+      material.emissive = new Color('#1f2a44')
+      material.emissiveIntensity = 0.75
+      material.specular = new Color('#6d88c7')
+      material.shininess = 18
+      material.needsUpdate = true
+    })
+  }, [globeReady])
   
   // Cleanup Three.js resources on unmount
   useEffect(() => {
