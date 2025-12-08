@@ -2,8 +2,9 @@ import { tool } from '@openai/agents'
 import { loadFlightData, haversineDistanceKm, FlightStop } from '@/lib/flight-data'
 import { searchStopsByLocation } from '@/lib/flight-data'
 
-// Rate limiting: Nominatim allows 1 request per second
-let lastRequestTime = 0
+// Rate limiting: Photon geocoding service - ensure at least 1 second between requests
+// Use a promise queue to serialize requests and prevent race conditions
+let requestQueue: Promise<number> = Promise.resolve(0) // Resolves with timestamp of last request completion
 const MIN_REQUEST_INTERVAL = 1000 // 1 second in milliseconds
 
 /**
@@ -18,13 +19,28 @@ async function geocodeLocation(locationName: string): Promise<Array<{
   type: string
   importance?: number
 }>> {
-  // Rate limiting: ensure at least 1 second between requests
+  // Rate limiting: use promise queue to serialize requests atomically
+  // This prevents race conditions where multiple concurrent requests could
+  // read the same lastRequestTime and violate the rate limit
+  // Wait for previous request to complete and get its completion timestamp
+  const lastRequestCompletionTime = await requestQueue
+  
+  // Calculate wait time based on when the last request actually completed
   const now = Date.now()
-  const timeSinceLastRequest = now - lastRequestTime
+  const timeSinceLastRequest = now - lastRequestCompletionTime
   if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
     await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest))
   }
-  lastRequestTime = Date.now()
+  
+  // Create a new promise that will be awaited by the next request
+  // This ensures requests are serialized and rate-limited properly
+  let resolveNext: (timestamp: number) => void
+  const nextRequestPromise = new Promise<number>((resolve) => {
+    resolveNext = resolve
+  })
+  
+  // Update the queue to point to this request's completion promise
+  requestQueue = nextRequestPromise
   
   const encodedLocation = encodeURIComponent(locationName)
   // Use Photon geocoding service (open source, no API key needed)
@@ -41,27 +57,39 @@ async function geocodeLocation(locationName: string): Promise<Array<{
   
   console.log(`[geocodeLocation] Response status: ${response.status}`)
   
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error')
-    console.error(`[geocodeLocation] API error ${response.status}: ${errorText.substring(0, 500)}`)
-    throw new Error(`Geocoding API error: ${response.status}`)
+  try {
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error')
+      console.error(`[geocodeLocation] API error ${response.status}: ${errorText.substring(0, 500)}`)
+      throw new Error(`Geocoding API error: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    // Transform Photon format to match what we expect
+    if (!data.features || !Array.isArray(data.features)) {
+      // Resolve next request with current timestamp before returning
+      resolveNext!(Date.now())
+      return []
+    }
+    
+    const result = data.features.map((feature: any) => ({
+      name: feature.properties?.name || feature.properties?.display_name || locationName,
+      display_name: feature.properties?.name || feature.properties?.display_name || locationName,
+      lat: feature.geometry?.coordinates?.[1] || 0,
+      lon: feature.geometry?.coordinates?.[0] || 0,
+      type: feature.properties?.type || 'unknown',
+      importance: feature.properties?.importance || 0,
+    }))
+    
+    // Resolve next request with current timestamp after this one completes successfully
+    resolveNext!(Date.now())
+    return result
+  } catch (error) {
+    // Always resolve next request with current timestamp, even on error, to prevent queue from blocking
+    resolveNext!(Date.now())
+    throw error
   }
-  
-  const data = await response.json()
-  
-  // Transform Photon format to match what we expect
-  if (!data.features || !Array.isArray(data.features)) {
-    return []
-  }
-  
-  return data.features.map((feature: any) => ({
-    name: feature.properties?.name || feature.properties?.display_name || locationName,
-    display_name: feature.properties?.name || feature.properties?.display_name || locationName,
-    lat: feature.geometry?.coordinates?.[1] || 0,
-    lon: feature.geometry?.coordinates?.[0] || 0,
-    type: feature.properties?.type || 'unknown',
-    importance: feature.properties?.importance || 0,
-  }))
 }
 
 /**
