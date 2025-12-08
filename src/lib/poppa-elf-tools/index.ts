@@ -10,4 +10,5 @@ export { searchStopsByLocationTool } from './search-stops-by-location'
 export { getStopsByTimeTool } from './get-stops-by-time'
 export { calculateStatisticsTool } from './calculate-statistics'
 export { findNearestStopByLocationNameTool } from './find-nearest-stop-by-location-name'
+export { searchStopsByRegionTool } from './search-stops-by-region'
 

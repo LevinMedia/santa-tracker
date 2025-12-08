@@ -56,7 +56,45 @@ export const searchStopsByLocationTool = tool({
       return `No stops found matching ${searchTerms.join(', ')} in Santa's 2024 flight records.`
     }
     
-    // Format the results
+    const MAX_DISPLAY_STOPS = 5 // Maximum number of stops to show in detail
+    
+    // For large result sets, provide a summary
+    if (stops.length > MAX_DISPLAY_STOPS) {
+      // Get unique cities/locations
+      const locations = new Set<string>()
+      stops.forEach(stop => {
+        const location = stop.state_province 
+          ? `${stop.city}, ${stop.state_province}`
+          : stop.city
+        locations.add(location)
+      })
+      
+      const locationList = Array.from(locations).sort()
+      const locationCount = locationList.length
+      
+      // Build search description
+      const searchDesc = []
+      if (city) searchDesc.push(`city "${city}"`)
+      if (state_province) searchDesc.push(`state/province "${state_province}"`)
+      if (country) searchDesc.push(`country "${country}"`)
+      const searchDescription = searchDesc.join(' in ')
+      
+      let response = `Oh my snowflakes! Santa made ${stops.length.toLocaleString()} stop${stops.length === 1 ? '' : 's'} in ${searchDescription} during his 2024 flight!\n\n`
+      
+      // Show a sample of locations (limit to first 10 for readability)
+      const displayLocations = locationList.slice(0, 10)
+      if (locationList.length <= 10) {
+        response += `He visited ${locationList.length} location${locationCount === 1 ? '' : 's'}: ${locationList.join(', ')}.\n\n`
+      } else {
+        response += `He visited ${locationList.length} location${locationCount === 1 ? '' : 's'}, including: ${displayLocations.join(', ')}, and ${locationList.length - 10} more.\n\n`
+      }
+      
+      response += `Would you like to know about Santa's stops at a specific location? Just ask me about a specific city or place, and I can tell you all about his visits there!`
+      
+      return response.trim()
+    }
+    
+    // For smaller result sets (5 or fewer), show detailed list
     let response = `Found ${stops.length} stop${stops.length === 1 ? '' : 's'}:\n\n`
     
     stops.forEach((stop, index) => {

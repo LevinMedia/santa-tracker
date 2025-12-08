@@ -323,3 +323,78 @@ function parseUTCTime(utcTime: string): number {
   return new Date(utcTime.replace(' ', 'T') + 'Z').getTime()
 }
 
+/**
+ * Geographic region bounds (lat/lng)
+ */
+export interface RegionBounds {
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+/**
+ * Map of common geographic regions to their lat/lng bounds
+ */
+export const REGION_BOUNDS: Record<string, RegionBounds> = {
+  // US Regions
+  'west coast': { minLat: 32.0, maxLat: 49.0, minLng: -125.0, maxLng: -116.0 },
+  'west coast us': { minLat: 32.0, maxLat: 49.0, minLng: -125.0, maxLng: -116.0 },
+  'east coast': { minLat: 25.0, maxLat: 47.0, minLng: -81.0, maxLng: -66.0 },
+  'east coast us': { minLat: 25.0, maxLat: 47.0, minLng: -81.0, maxLng: -66.0 },
+  'midwest': { minLat: 37.0, maxLat: 49.0, minLng: -102.0, maxLng: -81.0 },
+  'midwest us': { minLat: 37.0, maxLat: 49.0, minLng: -102.0, maxLng: -81.0 },
+  'pacific northwest': { minLat: 42.0, maxLat: 49.0, minLng: -125.0, maxLng: -116.0 },
+  'pacific northwest us': { minLat: 42.0, maxLat: 49.0, minLng: -125.0, maxLng: -116.0 },
+  'new england': { minLat: 41.0, maxLat: 47.0, minLng: -73.0, maxLng: -66.0 },
+  'new england us': { minLat: 41.0, maxLat: 47.0, minLng: -73.0, maxLng: -66.0 },
+  'south': { minLat: 25.0, maxLat: 37.0, minLng: -106.0, maxLng: -75.0 },
+  'south us': { minLat: 25.0, maxLat: 37.0, minLng: -106.0, maxLng: -75.0 },
+  'southwest': { minLat: 31.0, maxLat: 37.0, minLng: -125.0, maxLng: -103.0 },
+  'southwest us': { minLat: 31.0, maxLat: 37.0, minLng: -125.0, maxLng: -103.0 },
+  'southeast': { minLat: 25.0, maxLat: 37.0, minLng: -88.0, maxLng: -75.0 },
+  'southeast us': { minLat: 25.0, maxLat: 37.0, minLng: -88.0, maxLng: -75.0 },
+  'great plains': { minLat: 37.0, maxLat: 49.0, minLng: -106.0, maxLng: -95.0 },
+  'great plains us': { minLat: 37.0, maxLat: 49.0, minLng: -106.0, maxLng: -95.0 },
+  
+  // Continents/Countries (broad regions)
+  'north america': { minLat: 7.0, maxLat: 83.0, minLng: -180.0, maxLng: -52.0 },
+  'south america': { minLat: -56.0, maxLat: 12.0, minLng: -82.0, maxLng: -34.0 },
+  'europe': { minLat: 35.0, maxLat: 71.0, minLng: -10.0, maxLng: 40.0 },
+  'asia': { minLat: -10.0, maxLat: 78.0, minLng: 26.0, maxLng: 180.0 },
+  'africa': { minLat: -35.0, maxLat: 37.0, minLng: -18.0, maxLng: 52.0 },
+  'oceania': { minLat: -50.0, maxLat: 0.0, minLng: 110.0, maxLng: 180.0 },
+  'australia': { minLat: -44.0, maxLat: -10.0, minLng: 113.0, maxLng: 154.0 },
+  
+  // Specific countries/regions
+  'united states': { minLat: 24.0, maxLat: 50.0, minLng: -125.0, maxLng: -66.0 },
+  'canada': { minLat: 42.0, maxLat: 83.0, minLng: -141.0, maxLng: -52.0 },
+  'mexico': { minLat: 14.0, maxLat: 33.0, minLng: -118.0, maxLng: -86.0 },
+  'united kingdom': { minLat: 50.0, maxLat: 61.0, minLng: -8.0, maxLng: 2.0 },
+  'france': { minLat: 42.0, maxLat: 51.0, minLng: -5.0, maxLng: 10.0 },
+  'germany': { minLat: 47.0, maxLat: 55.0, minLng: 6.0, maxLng: 15.0 },
+  'italy': { minLat: 36.0, maxLat: 47.0, minLng: 6.0, maxLng: 19.0 },
+  'spain': { minLat: 36.0, maxLat: 44.0, minLng: -10.0, maxLng: 5.0 },
+  'japan': { minLat: 24.0, maxLat: 46.0, minLng: 123.0, maxLng: 146.0 },
+  'china': { minLat: 18.0, maxLat: 54.0, minLng: 73.0, maxLng: 135.0 },
+  'india': { minLat: 6.0, maxLat: 36.0, minLng: 68.0, maxLng: 98.0 },
+  'brazil': { minLat: -34.0, maxLat: 6.0, minLng: -74.0, maxLng: -32.0 },
+  'russia': { minLat: 41.0, maxLat: 82.0, minLng: 19.0, maxLng: 180.0 },
+}
+
+/**
+ * Search stops by geographic region using lat/lng bounds
+ * @param bounds Region bounds (minLat, maxLat, minLng, maxLng)
+ * @returns Array of matching flight stops within the bounds
+ */
+export function searchStopsByRegion(bounds: RegionBounds): FlightStop[] {
+  const stops = loadFlightData()
+  
+  return stops.filter(stop => {
+    return stop.lat >= bounds.minLat &&
+           stop.lat <= bounds.maxLat &&
+           stop.lng >= bounds.minLng &&
+           stop.lng <= bounds.maxLng
+  })
+}
+
