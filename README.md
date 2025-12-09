@@ -25,9 +25,13 @@ Next.js • react-globe.gl • Tailwind CSS • Open-Meteo • TypeScript
 
 ## Project Structure
 
-The interesting bits are in `src/components/GlobeMap.tsx` and `scripts/`. 
+The interesting bits are in `src/components/GlobeMap.tsx` and `scripts/`.
 
 The CSV files in `public/` contain... well, you'll see.
+
+### Poppa Elf Integration
+
+There's also a certain chatty elder elf lurking in the codebase. Ask the Poppa Elf about Santa's 2024 flight and he'll happily whisper what he can—just don't expect him to reveal all his secrets at once.
 
 ## Contributing
 
