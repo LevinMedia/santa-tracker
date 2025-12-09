@@ -716,15 +716,11 @@ function HomeContent() {
         id: `divider-${Date.now()}`,
         kind: 'hr',
       })
-      
+
       await sleep(260)
       router.push(`/map?flight=${flight.filename}`)
-      
-      appendOptionsEntry()
-      setShowPrompt(true)
-      setIsProcessing(false)
     },
-    [appendEntry, appendOptionsEntry, router, sleep, updateEntry]
+    [appendEntry, router, sleep, updateEntry]
   )
 
   const handleCommand = useCallback(
@@ -837,13 +833,10 @@ function HomeContent() {
           id: `divider-${Date.now()}`,
           kind: 'hr',
         })
-        
+
         await sleep(300)
         router.push(`/map?flight=${LIVE_FLIGHT_FILE}&mode=live`)
-        
-        appendOptionsEntry()
-        setShowPrompt(true)
-        setIsProcessing(false)
+
         return
       }
 
@@ -882,10 +875,6 @@ function HomeContent() {
 
         router.push('/map?flight=2024_santa_tracker&mode=replay')
 
-        appendOptionsEntry()
-        setUserInput('')
-        setShowPrompt(true)
-        setIsProcessing(false)
         return
       } else if (normalized === '5') {
         setIsProcessing(true)
@@ -922,10 +911,6 @@ function HomeContent() {
 
         router.push('/map?flight=2025_santa_tracker&mode=replay')
 
-        appendOptionsEntry()
-        setUserInput('')
-        setShowPrompt(true)
-        setIsProcessing(false)
         return
       } else if (normalized === 'A') {
         setIsProcessing(true)
