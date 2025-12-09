@@ -1,4 +1,5 @@
 import { Agent, run } from '@openai/agents'
+import { track } from '@vercel/analytics/server'
 import { NextRequest } from 'next/server'
 import { getStopByNumberTool, searchStopsByLocationTool, getStopsByTimeTool, calculateStatisticsTool, findNearestStopByLocationNameTool, searchStopsByRegionTool } from '@/lib/poppa-elf-tools'
 
@@ -181,11 +182,18 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Track how many messages are sent to Poppa Elf
+    await track('poppa_elf_message_sent', {
+      messageLength: lastUserMessage.content.length,
+      totalMessages: messages.length,
+      recentContextMessages: recentMessages.length,
+    })
+
     // Log the message and available tools
     console.log('[Poppa Elf API] Received message:', lastUserMessage.content)
     console.log('[Poppa Elf API] Available tools:', poppaElfAgent.tools.map((t: any) => t.name || t.definition?.name || 'unknown'))
     console.log('[Poppa Elf API] Running agent with message length:', fullMessage.length)
-    
+
     // Run the agent
     const result = await run(poppaElfAgent, fullMessage)
     
@@ -194,6 +202,12 @@ export async function POST(req: NextRequest) {
       hasOutput: !!result.finalOutput,
       outputLength: result.finalOutput?.length || 0,
       outputPreview: result.finalOutput?.substring(0, 200) || 'no output',
+    })
+
+    // Track Poppa Elf responses
+    await track('poppa_elf_response_sent', {
+      responseLength: result.finalOutput?.length || 0,
+      hasOutput: !!result.finalOutput,
     })
 
     // Create a streaming response - stream word by word for better effect
