@@ -624,14 +624,24 @@ function HomeContent() {
     if (stored) {
       try {
         const parsed: TerminalEntry[] = JSON.parse(stored)
-        setEntries(parsed)
+        const lastOptionsIndex = [...parsed].map(entry => entry.kind).lastIndexOf('options')
 
-        const lastOptionsEntry = [...parsed].reverse().find(entry => entry.kind === 'options')
-
-        if (lastOptionsEntry) {
-          setActiveOptionsId(lastOptionsEntry.id)
-        } else {
+        // If there are entries after the last options menu (e.g., replay/live launch commands),
+        // trim them off and append a fresh divider + options menu so the command menu stays last.
+        if (lastOptionsIndex !== -1 && lastOptionsIndex < parsed.length - 1) {
+          const trimmed = parsed.slice(0, lastOptionsIndex + 1)
+          const dividerEntry: TerminalEntry = { id: `divider-${Date.now()}`, kind: 'hr' }
+          const optionsEntry: TerminalEntry = { id: `options-${Date.now() + 1}`, kind: 'options' }
+          const restored = [...trimmed, dividerEntry, optionsEntry]
+          setEntries(restored)
+          persistEntries(restored)
+          setActiveOptionsId(optionsEntry.id)
+        } else if (lastOptionsIndex === -1) {
+          setEntries(parsed)
           appendOptionsEntry()
+        } else {
+          setEntries(parsed)
+          setActiveOptionsId(parsed[lastOptionsIndex].id)
         }
 
         setShowPrompt(true)
@@ -645,7 +655,7 @@ function HomeContent() {
     }
 
     return () => timersRef.current.forEach(t => clearTimeout(t))
-  }, [appendOptionsEntry, runBootSequence])
+  }, [appendOptionsEntry, persistEntries, runBootSequence])
 
   // Auto-scroll to bottom only if user is near the bottom (for passive updates)
   const isNearBottom = useCallback(() => {
