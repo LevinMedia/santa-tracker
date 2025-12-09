@@ -63,7 +63,9 @@ function OptionsEntry({
   onAnnouncementComplete,
   onElementAppear,
   isSantaLive = false,
-  isFlightComplete = false
+  isFlightComplete = false,
+  showAnnouncement = true,
+  hasShownAnnouncement = false,
 }: {
   entryId: string
   isActive: boolean
@@ -73,9 +75,13 @@ function OptionsEntry({
   onElementAppear?: () => void
   isSantaLive?: boolean
   isFlightComplete?: boolean
+  showAnnouncement?: boolean
+  hasShownAnnouncement?: boolean
 }) {
-  const [typewriterDone, setTypewriterDone] = useState(!isActive)
-  const [showCTA, setShowCTA] = useState(!isActive)
+  const shouldAnimateAnnouncement = isActive && showAnnouncement && !hasShownAnnouncement
+
+  const [typewriterDone, setTypewriterDone] = useState(!shouldAnimateAnnouncement)
+  const [showCTA, setShowCTA] = useState(!shouldAnimateAnnouncement)
   
   // Filter out 2025 replay until flight is complete (after flight window)
   const filteredOptions = useMemo(() =>
@@ -87,7 +93,9 @@ function OptionsEntry({
     if (isFlightComplete) return '5'
     return 'R'
   }, [isFlightComplete, isSantaLive])
-  const [visibleButtons, setVisibleButtons] = useState(!isActive ? filteredOptions.length : 0)
+  const [visibleButtons, setVisibleButtons] = useState(
+    !shouldAnimateAnnouncement ? filteredOptions.length : 0
+  )
   
   const handleTypewriterComplete = useCallback(() => {
     setTypewriterDone(true)
@@ -95,16 +103,16 @@ function OptionsEntry({
   
   // Stream in CTA and buttons sequentially after typewriter completes
   useEffect(() => {
-    if (!typewriterDone || !isActive) return
-    
+    if (!typewriterDone || !isActive || !showAnnouncement || hasShownAnnouncement) return
+
     // Show CTA first
     const ctaTimer = setTimeout(() => {
       setShowCTA(true)
       onElementAppear?.()
     }, 150)
-    
+
     return () => clearTimeout(ctaTimer)
-  }, [typewriterDone, isActive, onElementAppear])
+  }, [typewriterDone, isActive, onElementAppear, showAnnouncement, hasShownAnnouncement])
   
   // Stream in buttons one by one after CTA appears
   useEffect(() => {
@@ -134,14 +142,16 @@ function OptionsEntry({
   
   return (
     <div className="text-[#33ff33] text-sm sm:text-base leading-relaxed mt-2 mb-10 animate-fadeIn">
-      <p className="mb-4">
-        <TypewriterText
-          text={isFlightComplete ? ANNOUNCEMENT_TEXT_COMPLETE : (isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT)}
-          isActive={isActive}
-          onComplete={handleTypewriterComplete}
-          onProgress={isActive ? onElementAppear : undefined}
-        />
-      </p>
+      {showAnnouncement && (
+        <p className="mb-4">
+          <TypewriterText
+            text={isFlightComplete ? ANNOUNCEMENT_TEXT_COMPLETE : (isSantaLive ? ANNOUNCEMENT_TEXT_LIVE : ANNOUNCEMENT_TEXT)}
+            isActive={shouldAnimateAnnouncement}
+            onComplete={handleTypewriterComplete}
+            onProgress={isActive ? onElementAppear : undefined}
+          />
+        </p>
+      )}
       {showCTA && (
         <>
           <div>Click, tap or enter command to continue:</div>
@@ -265,6 +275,7 @@ interface TerminalEntry {
   kind: EntryKind
   text?: string
   className?: string
+  showAnnouncement?: boolean
 }
 
 const STORAGE_KEY = 'terminalHistory'
@@ -373,6 +384,7 @@ function HomeContent() {
   const [flightLogs] = useState<FlightLog[]>([])
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [announcementComplete, setAnnouncementComplete] = useState(false)
+  const [hasShownAnnouncement, setHasShownAnnouncement] = useState(false)
   const [isShutdown, setIsShutdown] = useState(false)
   const [isSantaLive, setIsSantaLive] = useState(false)
   const [isFlightComplete, setIsFlightComplete] = useState(false)
@@ -462,16 +474,17 @@ function HomeContent() {
     [persistEntries],
   )
 
-  const appendOptionsEntry = useCallback(() => {
+  const appendOptionsEntry = useCallback((showAnnouncement = !hasShownAnnouncement) => {
     const id = `options-${Date.now()}`
     appendEntry({
       id,
       kind: 'options',
+      showAnnouncement,
     })
     setActiveOptionsId(id)
-    setAnnouncementComplete(false)
+    setAnnouncementComplete(!showAnnouncement || hasShownAnnouncement)
     return id
-  }, [appendEntry])
+  }, [appendEntry, hasShownAnnouncement])
 
   const appendFlightMenuEntry = useCallback(() => {
     const id = `flight-menu-${Date.now()}`
@@ -625,6 +638,9 @@ function HomeContent() {
       try {
         const parsed: TerminalEntry[] = JSON.parse(stored)
         setEntries(parsed)
+
+        const hasAnnouncementEntry = parsed.some(entry => entry.kind === 'options' && (entry.showAnnouncement ?? true))
+        setHasShownAnnouncement(hasAnnouncementEntry)
 
         const lastOptionsEntry = [...parsed].reverse().find(entry => entry.kind === 'options')
 
@@ -1323,10 +1339,15 @@ function HomeContent() {
                   isActive={isActiveOptions}
                   isProcessing={isProcessing}
                   onCommand={handleCommand}
-                  onAnnouncementComplete={isActiveOptions ? () => setAnnouncementComplete(true) : undefined}
+                  onAnnouncementComplete={isActiveOptions ? () => {
+                    setAnnouncementComplete(true)
+                    setHasShownAnnouncement(true)
+                  } : undefined}
                   onElementAppear={isActiveOptions ? scrollToBottom : undefined}
                   isSantaLive={isSantaLive}
                   isFlightComplete={isFlightComplete}
+                  showAnnouncement={entry.showAnnouncement ?? true}
+                  hasShownAnnouncement={hasShownAnnouncement}
                 />
               )
             }
