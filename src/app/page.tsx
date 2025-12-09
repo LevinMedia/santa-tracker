@@ -327,7 +327,7 @@ ABOUT THE SANTA TRACKER MEGA 7000 HD
 
 ---
 
-Hi, I'm David, creator of this site. I'm a software designer, and as of late, a vibe coding enthusiast. (Developting software totally with AI) People are rightfully nervous about AI and what it means for our future. The doomers say it will destroy us. The accelerationists say it will save us. The truth, as always, is probably somewhere in between.
+Hi, I'm David, creator of this site. I'm a software designer, and as of late, a vibe coding enthusiast. (Developing software totally with AI.) People are rightfully nervous about AI and what it means for our future. The doomers say it will destroy us. The accelerationists say it will save us. The truth, as always, is probably somewhere in between.
 
 But here's the thing—I believe AI can be used for GOOD.
 
