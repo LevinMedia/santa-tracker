@@ -469,14 +469,21 @@ function HomeContent() {
     [persistEntries],
   )
 
-  const appendOptionsEntry = useCallback(() => {
+  const appendOptionsEntry = useCallback((skipAnnouncement = false) => {
     const id = `options-${Date.now()}`
+    const shouldSkipAnnouncement = skipAnnouncement || hasShownAnnouncement
+
     appendEntry({
       id,
       kind: 'options',
     })
     setActiveOptionsId(id)
-    setAnnouncementComplete(hasShownAnnouncement)
+    setAnnouncementComplete(shouldSkipAnnouncement)
+
+    if (shouldSkipAnnouncement && !hasShownAnnouncement) {
+      setHasShownAnnouncement(true)
+    }
+
     return id
   }, [appendEntry, hasShownAnnouncement])
 
@@ -632,16 +639,14 @@ function HomeContent() {
       try {
         const parsed: TerminalEntry[] = JSON.parse(stored)
         setEntries(parsed)
-        setHasShownAnnouncement(true)
 
-        const lastOptionsEntry = [...parsed].reverse().find(entry => entry.kind === 'options')
+        const hasOptionsHistory = parsed.some(entry => entry.kind === 'options')
 
-        if (lastOptionsEntry) {
-          setActiveOptionsId(lastOptionsEntry.id)
-        } else {
-          appendOptionsEntry()
+        if (hasOptionsHistory) {
+          setHasShownAnnouncement(true)
         }
 
+        appendOptionsEntry(true)
         setShowPrompt(true)
       } catch (error) {
         console.error('Failed to restore terminal history', error)
