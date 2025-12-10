@@ -15,10 +15,31 @@ interface PoppaElfChatProps {
   onClose: () => void
 }
 
+const POPPA_ELF_ASCII = `          ___
+       .-"   "-.
+      /         \
+      |  -  -  |
+      |   .-.   |
+      |  (___)  |
+      |         |
+      |  \___/  |
+      \         /
+       '-.___.-'
+        /  |  \
+       /   |   \
+      /    |    \
+     /     |     \
+    /      |      \
+   /       |       \
+  /        |        \
+  '-----------------'`
+
 export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSpeechMode, setIsSpeechMode] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [hasInitialized, setHasInitialized] = useState(false)
@@ -221,6 +242,44 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
     setGreetingMessage('')
   }
 
+  const playSpeech = async (text: string) => {
+    if (!text.trim()) return
+    try {
+      setIsSpeaking(true)
+      const response = await fetch('/api/poppa-elf/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text })
+      })
+
+      if (!response.ok) {
+        throw new Error('Unable to start Poppa Elf speech')
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+        setIsSpeaking(false)
+      }
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        setIsSpeaking(false)
+      }
+
+      await audio.play()
+    } catch (error) {
+      console.error('Error playing Poppa Elf speech:', error)
+      setIsSpeaking(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
@@ -245,6 +304,8 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       timestamp: new Date()
     }
     setMessages(prev => [...prev, assistantMessage])
+
+    let finalAssistantContent = ''
 
     try {
       // Prepare messages for API (convert to format expected by API)
@@ -312,7 +373,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             }
 
             // Update the message with accumulated content
-            setMessages(prev => prev.map(msg => 
+            setMessages(prev => prev.map(msg =>
               msg.id === assistantMessageId
                 ? { ...msg, content: accumulatedContent }
                 : msg
@@ -320,11 +381,16 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           }
         }
       } finally {
+        finalAssistantContent = accumulatedContent
         // Ensure loading is cleared
         setIsLoading(false)
         reader.releaseLock()
         // Refocus input after response completes
         setTimeout(() => inputRef.current?.focus(), 100)
+      }
+
+      if (isSpeechMode && finalAssistantContent.trim()) {
+        playSpeech(finalAssistantContent.trim())
       }
     } catch (error) {
       console.error('Error sending message:', error)
@@ -411,6 +477,21 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setIsSpeechMode(prev => !prev)}
+                className={`flex items-center gap-1.5 border text-xs px-2 py-1 cursor-pointer transition-colors ${
+                  isSpeechMode
+                    ? 'bg-[#33ff33] text-black border-[#33ff33]'
+                    : 'bg-black text-[#33ff33] border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                }`}
+              >
+                {isSpeechMode ? 'SPEECH MODE' : 'MIC OFF'}
+              </button>
+              {isSpeechMode && (
+                <span className="text-[10px] uppercase tracking-wide text-[#66ff66]">
+                  Poppa Elf will talk
+                </span>
+              )}
+              <button
                 onClick={clearChatHistory}
                 className="flex items-center gap-1.5 bg-black text-[#33ff33] border border-[#33ff33] hover:bg-[#33ff33] hover:text-black transition-colors text-xs px-2 py-1 cursor-pointer"
               >
@@ -430,81 +511,95 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             ref={messagesContainerRef}
             className="flex-1 overflow-y-auto min-h-0 p-4 pb-6 md:pb-4 scrollbar-thin"
           >
-            <div className="flex flex-col space-y-4">
-              {/* Intro sequence - only show connecting animation while connecting */}
-              {showIntro && introStep === 'connecting' && (
-                <div className="py-1 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                    Establishing connection with north pole{connectingDots}
-                  </div>
+            {isSpeechMode ? (
+              <div className="flex flex-col items-center justify-center text-center text-[#66ff66] min-h-full gap-4">
+                <pre className="text-xs leading-4 whitespace-pre text-[#33ff33] bg-black/50 p-4 border border-[#33ff33]/40 rounded">
+{POPPA_ELF_ASCII}
+                </pre>
+                <div className="max-w-md text-sm text-[#66ff66]/80">
+                  Poppa Elf is in storytelling mode. He will speak his replies aloud while your conversation quietly saves behind the scenes. Turn off speech mode anytime to see the full chat stream.
                 </div>
-              )}
-
-              {!showIntro && messages.length === 0 && (
-                <div className="text-center text-[#66ff66]/60 text-sm mt-8">
-                  <p className="mb-2">Well hello there! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
-                  <p>Ask me anything about Santa's 2024 flight!</p>
-                </div>
-              )}
-
-              {messages.map((message) => (
-                (message.role === 'assistant' && !message.content.trim() ? null : (
-                <div
-                  key={message.id}
-                  className={`${
-                    message.role === 'user'
-                      ? 'bg-[#33ff33] text-black self-end'
-                      : message.id?.startsWith('connection-') || message.id?.startsWith('entered-')
-                      ? 'text-[#66ff66] self-start py-0.5'
-                      : 'text-[#66ff66] self-start'
-                  } ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'p-3 rounded border border-[#33ff33]/30'} ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'max-w-[80%]'} ${message.id?.startsWith('connection-') ? 'mb-2' : ''}`}
-                >
-                  {message.role === 'assistant' && message.content.trim().length > 0 && !message.id?.startsWith('connection-') && !message.id?.startsWith('entered-') && (
-                    <div className="text-xs mb-1 opacity-70">
-                      Poppa Elf
+                {isSpeaking && (
+                  <div className="text-xs uppercase tracking-wide text-[#33ff33]">Poppa Elf is talking...</div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col space-y-4">
+                {/* Intro sequence - only show connecting animation while connecting */}
+                {showIntro && introStep === 'connecting' && (
+                  <div className="py-1 self-start">
+                    <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                      Establishing connection with north pole{connectingDots}
                     </div>
-                  )}
-                  {message.role === 'assistant' ? (
-                    message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? (
-                      <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                        {message.content}
-                      </div>
-                    ) : (
-                      <div className="text-sm prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }) => <strong className="font-bold text-[#66ff66]">{children}</strong>,
-                            em: ({ children }) => <em className="italic text-[#66ff66]/90">{children}</em>,
-                            ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                            li: ({ children }) => <li className="ml-2">{children}</li>,
-                            h1: ({ children }) => <h1 className="text-base font-bold mb-2">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
-                            h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                            code: ({ children }) => <code className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                            blockquote: ({ children }) => <blockquote className="border-l-2 border-[#66ff66]/50 pl-2 italic">{children}</blockquote>,
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    )
-                  ) : (
-                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                  )}
-                </div>
-                ))
-              ))}
-
-              {isLoading && (
-                <div className="p-3 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                    Sending your message to the north pole...
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {!showIntro && messages.length === 0 && (
+                  <div className="text-center text-[#66ff66]/60 text-sm mt-8">
+                    <p className="mb-2">Well hello there! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
+                    <p>Ask me anything about Santa's 2024 flight!</p>
+                  </div>
+                )}
+
+                {messages.map((message) => (
+                  (message.role === 'assistant' && !message.content.trim() ? null : (
+                  <div
+                    key={message.id}
+                    className={`${
+                      message.role === 'user'
+                        ? 'bg-[#33ff33] text-black self-end'
+                        : message.id?.startsWith('connection-') || message.id?.startsWith('entered-')
+                        ? 'text-[#66ff66] self-start py-0.5'
+                        : 'text-[#66ff66] self-start'
+                    } ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'p-3 rounded border border-[#33ff33]/30'} ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'max-w-[80%]'} ${message.id?.startsWith('connection-') ? 'mb-2' : ''}`}
+                  >
+                    {message.role === 'assistant' && message.content.trim().length > 0 && !message.id?.startsWith('connection-') && !message.id?.startsWith('entered-') && (
+                      <div className="text-xs mb-1 opacity-70">
+                        Poppa Elf
+                      </div>
+                    )}
+                    {message.role === 'assistant' ? (
+                      message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? (
+                        <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                          {message.content}
+                        </div>
+                      ) : (
+                        <div className="text-sm prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              strong: ({ children }) => <strong className="font-bold text-[#66ff66]">{children}</strong>,
+                              em: ({ children }) => <em className="italic text-[#66ff66]/90">{children}</em>,
+                              ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({ children }) => <li className="ml-2">{children}</li>,
+                              h1: ({ children }) => <h1 className="text-base font-bold mb-2">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                              code: ({ children }) => <code className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                              blockquote: ({ children }) => <blockquote className="border-l-2 border-[#66ff66]/50 pl-2 italic">{children}</blockquote>,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                    )}
+                  </div>
+                  ))
+                ))}
+
+                {isLoading && (
+                  <div className="p-3 self-start">
+                    <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                      Sending your message to the north pole...
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Input area */}
