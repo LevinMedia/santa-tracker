@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
+    "@heroicons/react": "^2.2.0",
     "@openai/agents": "^0.3.4",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.0",

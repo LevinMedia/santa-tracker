@@ -125,6 +125,8 @@ src/
 ### Phase 5: Add Statistics
 - Add `calculate_basic_stats` tool
 - Test: "How many stops did Santa make?"
+- Test: "How many stops did santa make in a region?"
+- Test: "what was santa's average speed while traveling through california?"
 
 ### Phase 6+: Additional Tools (One at a time)
 - Geographic regions (`search_stops_by_region`)
