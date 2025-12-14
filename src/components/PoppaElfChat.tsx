@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { PhoneIcon, ChatBubbleLeftRightIcon, MicrophoneIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/solid'
 
 interface Message {
   id: string
@@ -19,13 +20,34 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isSpeechMode, setIsSpeechMode] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [hasInitialized, setHasInitialized] = useState(false)
+  const [showModeSelection, setShowModeSelection] = useState(false)
+  const [hasChosenMode, setHasChosenMode] = useState(false)
   const [showIntro, setShowIntro] = useState(false)
   const [introStep, setIntroStep] = useState<'connecting' | 'entered' | 'greeting' | 'complete'>('connecting')
   const [greetingMessage, setGreetingMessage] = useState('')
+  const [hasPlayedGreetingSpeech, setHasPlayedGreetingSpeech] = useState(false)
   const [connectingDots, setConnectingDots] = useState('')
+  const [speechPreview, setSpeechPreview] = useState<{ content: string; status: 'visible' | 'fading' } | null>(null)
+  const speechPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const prevIsSpeakingRef = useRef(false)
+  const [firstAssistantReceived, setFirstAssistantReceived] = useState(false)
+  const [isSpeechPreparing, setIsSpeechPreparing] = useState(false)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
+  
+  // Recording state
+  const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'recorded'>('idle')
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null)
+  const [transcribedText, setTranscribedText] = useState('')
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const mediaStreamRef = useRef<MediaStream | null>(null)
 
   // Load messages from sessionStorage when chat opens, or start intro sequence
   useEffect(() => {
@@ -33,35 +55,59 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       const savedMessages = sessionStorage.getItem('poppa-elf-messages')
       if (savedMessages) {
         try {
-          const parsed = JSON.parse(savedMessages)
-          if (parsed.length > 0) {
+          const parsed = JSON.parse(savedMessages) as Array<{
+            id: string
+            role: 'user' | 'assistant'
+            content: string
+            timestamp: string
+          }>
+          if (Array.isArray(parsed) && parsed.length > 0) {
             // User has saved messages, use those
-            setMessages(parsed.map((msg: any) => ({
+            setMessages(parsed.map((msg) => ({
               ...msg,
               timestamp: new Date(msg.timestamp)
             })))
+            const hasAssistant = parsed.some(msg => msg.role === 'assistant' && msg.content?.trim())
+            setFirstAssistantReceived(hasAssistant)
             setHasInitialized(true)
+            setHasChosenMode(true)
+            setShowModeSelection(false)
+            setHasPlayedGreetingSpeech(false)
             return
           }
-        } catch (e) {
+        } catch {
           // Invalid data, fall through to start intro
         }
       }
-      // No saved messages - start intro sequence
-      setShowIntro(true)
+      // No saved messages - wait for user to pick how to talk
+      setShowModeSelection(true)
+      setShowIntro(false)
       setIntroStep('connecting')
+      setHasChosenMode(false)
     } else if (!isOpen) {
       // Reset initialization when closed
       setHasInitialized(false)
       setShowIntro(false)
       setIntroStep('connecting')
       setGreetingMessage('')
+      setShowModeSelection(false)
+      setHasChosenMode(false)
+      setIsSpeechMode(false)
+      setHasPlayedGreetingSpeech(false)
+      setFirstAssistantReceived(false)
+      setIsSpeechPreparing(false)
+      // Reset recording state
+      cleanupAudioResources()
+      setRecordingState('idle')
+      setRecordedAudio(null)
+      setTranscribedText('')
+      audioChunksRef.current = []
     }
   }, [isOpen, hasInitialized])
 
   // Handle intro sequence
   useEffect(() => {
-    if (!showIntro || !isOpen) return
+    if (!showIntro || !isOpen || !hasChosenMode) return
 
     const runIntroSequence = async () => {
       // Step 1: "Establishing connection with north pole..." (1.5 seconds)
@@ -170,12 +216,16 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       setIntroStep('complete')
       setShowIntro(false)
       setHasInitialized(true)
+      setGreetingMessage(finalGreetingContent)
+      if (finalGreetingContent.trim()) {
+        setFirstAssistantReceived(true)
+      }
       // Focus input after intro completes
       setTimeout(() => inputRef.current?.focus(), 100)
     }
 
     runIntroSequence()
-  }, [showIntro, isOpen])
+  }, [showIntro, isOpen, hasChosenMode])
 
   // Animate connecting dots
   useEffect(() => {
@@ -208,6 +258,17 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
     }
   }, [messages, hasInitialized])
 
+  const handleModeSelection = (mode: 'speech' | 'chat') => {
+    const wantsSpeech = mode === 'speech'
+    setIsSpeechMode(wantsSpeech)
+    setShowModeSelection(false)
+    setHasChosenMode(true)
+    setHasPlayedGreetingSpeech(mode !== 'speech')
+    setShowIntro(true)
+    setIntroStep('connecting')
+    setGreetingMessage('')
+  }
+
   const clearChatHistory = () => {
     // Clear sessionStorage
     if (typeof window !== 'undefined') {
@@ -216,25 +277,234 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
     // Reset to empty and start intro sequence
     setMessages([])
     setHasInitialized(false)
-    setShowIntro(true)
+    setShowIntro(false)
     setIntroStep('connecting')
     setGreetingMessage('')
+    setShowModeSelection(true)
+    setHasChosenMode(false)
+    setIsSpeechMode(false)
+    setHasPlayedGreetingSpeech(false)
+    setFirstAssistantReceived(false)
+    setIsSpeechPreparing(false)
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current.currentTime = 0
+      currentAudioRef.current = null
+      setIsSpeaking(false)
+    }
+    // Reset recording state
+    cleanupAudioResources()
+    setRecordingState('idle')
+    setRecordedAudio(null)
+    setTranscribedText('')
+    audioChunksRef.current = []
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
+  const playSpeech = async (text: string) => {
+    if (!text.trim()) return
+    try {
+      setIsSpeechPreparing(true)
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause()
+        currentAudioRef.current.currentTime = 0
+        currentAudioRef.current = null
+      }
+      const response = await fetch('/api/poppa-elf/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text })
+      })
+
+      if (!response.ok) {
+        throw new Error('Unable to start Poppa Elf speech')
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudioRef.current = audio
+
+      audio.onplay = () => {
+        setIsSpeechPreparing(false)
+        setIsSpeaking(true)
+      }
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null
+        }
+        setIsSpeaking(false)
+        setIsSpeechPreparing(false)
+      }
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        if (currentAudioRef.current === audio) {
+          currentAudioRef.current = null
+        }
+        setIsSpeaking(false)
+        setIsSpeechPreparing(false)
+      }
+
+      await audio.play()
+    } catch (error) {
+      console.error('Error playing Poppa Elf speech:', error)
+      setIsSpeaking(false)
+      setIsSpeechPreparing(false)
+    }
+  }
+
+  // Auto-play the greeting when speech mode was chosen for a fresh chat
+  useEffect(() => {
+    if (!isSpeechMode || hasPlayedGreetingSpeech || introStep !== 'complete') return
+    if (!greetingMessage.trim()) return
+
+    const speakGreeting = async () => {
+      await playSpeech(greetingMessage.trim())
+      setHasPlayedGreetingSpeech(true)
+    }
+
+    speakGreeting()
+  }, [isSpeechMode, hasPlayedGreetingSpeech, introStep, greetingMessage])
+
+  // Cleanup audio resources
+  const cleanupAudioResources = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+    }
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+      mediaRecorderRef.current = null
+    }
+    audioChunksRef.current = []
+    setIsRecording(false)
+  }
+
+  const startRecording = async () => {
+    try {
+      // Don't allow recording if Poppa Elf is speaking
+      if (isSpeaking || isSpeechPreparing || isLoading) {
+        return
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaStreamRef.current = stream
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+        ? 'audio/webm' 
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/webm' // fallback
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        setRecordedAudio(audioBlob)
+        setRecordingState('recorded')
+        
+        // Automatically transcribe when recording stops
+        await transcribeAudio(audioBlob)
+        
+        // Cleanup stream
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop())
+          mediaStreamRef.current = null
+        }
+      }
+
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event)
+        cleanupAudioResources()
+        setRecordingState('idle')
+      }
+
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingState('recording')
+    } catch (error) {
+      console.error('Error starting recording:', error)
+      cleanupAudioResources()
+      setRecordingState('idle')
+      alert('Unable to access microphone. Please check your permissions.')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+    }
+  }
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    try {
+      setIsTranscribing(true)
+      const formData = new FormData()
+      formData.append('audio', audioBlob, 'recording.webm')
+
+      const response = await fetch('/api/poppa-elf/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Transcription failed')
+      }
+
+      const data = await response.json()
+      setTranscribedText(data.text || '')
+    } catch (error) {
+      console.error('Error transcribing audio:', error)
+      setTranscribedText('')
+      alert('Unable to transcribe audio. Please try again.')
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  const sendMessage = async (messageContent: string) => {
+    if (!messageContent.trim() || isLoading) return
+
+    // If we're in speech mode and Poppa Elf is talking/preparing, interrupt current audio
+    if (isSpeechMode && (isSpeaking || isSpeechPreparing) && currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current.currentTime = 0
+      currentAudioRef.current = null
+      setIsSpeaking(false)
+      setIsSpeechPreparing(false)
+    }
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: messageContent.trim(),
       timestamp: new Date()
     }
 
     setMessages(prev => [...prev, userMessage])
-    setInput('')
     setIsLoading(true)
+
+    if (isSpeechMode) {
+      if (speechPreviewTimeoutRef.current) {
+        clearTimeout(speechPreviewTimeoutRef.current)
+      }
+      setSpeechPreview({ content: userMessage.content, status: 'visible' })
+    }
 
     // Create a placeholder message for streaming
     const assistantMessageId = `assistant-${Date.now()}`
@@ -245,6 +515,8 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       timestamp: new Date()
     }
     setMessages(prev => [...prev, assistantMessage])
+
+    let finalAssistantContent = ''
 
     try {
       // Prepare messages for API (convert to format expected by API)
@@ -286,7 +558,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
         throw new Error(errorMessage)
       }
 
-      // Handle streaming response
+      // Handle streaming response for both chat and speech modes
       if (!response.body) {
         throw new Error('No response body')
       }
@@ -305,24 +577,41 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             const chunk = decoder.decode(value, { stream: true })
             accumulatedContent += chunk
 
+            const trimmed = accumulatedContent.trim()
+
             // Clear loading state when first chunk arrives
-            if (!hasStartedStreaming && accumulatedContent.trim().length > 0) {
+            if (!hasStartedStreaming && trimmed.length > 0) {
               setIsLoading(false)
               hasStartedStreaming = true
             }
 
             // Update the message with accumulated content
-            setMessages(prev => prev.map(msg => 
+            setMessages(prev => prev.map(msg =>
               msg.id === assistantMessageId
                 ? { ...msg, content: accumulatedContent }
                 : msg
             ))
+
+            // Mark first assistant receipt as soon as we have content
+            if (!firstAssistantReceived && trimmed.length > 0) {
+              setFirstAssistantReceived(true)
+            }
           }
         }
       } finally {
+        finalAssistantContent = accumulatedContent
         // Ensure loading is cleared
         setIsLoading(false)
+        if (!firstAssistantReceived && finalAssistantContent.trim()) {
+          setFirstAssistantReceived(true)
+        }
         reader.releaseLock()
+
+        // If in speech mode, play the full response once streaming is done to avoid split audio
+        if (isSpeechMode && finalAssistantContent.trim()) {
+          playSpeech(finalAssistantContent.trim())
+        }
+
         // Refocus input after response completes
         setTimeout(() => inputRef.current?.focus(), 100)
       }
@@ -338,6 +627,37 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       // Refocus input on error
       setTimeout(() => inputRef.current?.focus(), 100)
     }
+  }
+
+  const handleSendTranscription = async () => {
+    if (!transcribedText.trim()) return
+
+    const textToSend = transcribedText.trim()
+    
+    // Reset recording state
+    setRecordingState('idle')
+    setRecordedAudio(null)
+    setTranscribedText('')
+    
+    // Send the transcribed message
+    await sendMessage(textToSend)
+  }
+
+  const handleCancelRecording = () => {
+    cleanupAudioResources()
+    setRecordingState('idle')
+    setRecordedAudio(null)
+    setTranscribedText('')
+    audioChunksRef.current = []
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isLoading) return
+    
+    const textToSend = input.trim()
+    setInput('')
+    await sendMessage(textToSend)
   }
 
   // Auto-scroll to bottom when new messages arrive
@@ -357,6 +677,64 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [isOpen])
+
+  // Clear any pending preview timeout on unmount or mode change
+  useEffect(() => {
+    return () => {
+      if (speechPreviewTimeoutRef.current) {
+        clearTimeout(speechPreviewTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isSpeechMode) {
+      setSpeechPreview(null)
+      if (speechPreviewTimeoutRef.current) {
+        clearTimeout(speechPreviewTimeoutRef.current)
+      }
+    }
+  }, [isSpeechMode])
+
+  useEffect(() => {
+    if (!isSpeechMode) {
+      prevIsSpeakingRef.current = isSpeaking
+      return
+    }
+
+    const wasSpeaking = prevIsSpeakingRef.current
+    if (wasSpeaking && !isSpeaking && speechPreview) {
+      setSpeechPreview(prev => (prev ? { ...prev, status: 'fading' } : prev))
+      if (speechPreviewTimeoutRef.current) {
+        clearTimeout(speechPreviewTimeoutRef.current)
+      }
+      speechPreviewTimeoutRef.current = setTimeout(() => setSpeechPreview(null), 800)
+    }
+    prevIsSpeakingRef.current = isSpeaking
+  }, [isSpeaking, isSpeechMode, speechPreview])
+
+  // Cleanup audio resources on unmount or mode switch
+  useEffect(() => {
+    return () => {
+      cleanupAudioResources()
+    }
+  }, [])
+
+  // Stop recording if switching modes or closing chat
+  useEffect(() => {
+    if (!isOpen || !isSpeechMode) {
+      if (recordingState === 'recording') {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop()
+        }
+        cleanupAudioResources()
+        setRecordingState('idle')
+        setRecordedAudio(null)
+        setTranscribedText('')
+        audioChunksRef.current = []
+      }
+    }
+  }, [isOpen, isSpeechMode, recordingState])
 
   if (!isOpen) return null
 
@@ -378,6 +756,44 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
           background-clip: text;
           color: transparent;
           animation: shimmer 3s linear infinite;
+        }
+        @keyframes speech-pulse {
+          0% { transform: scale(1); }
+          100% { transform: scale(0.94); }
+        }
+        .speech-pulse {
+          animation: speech-pulse 0.9s ease-in-out infinite alternate;
+        }
+        @keyframes subtle-pulse {
+          0% { opacity: 0.55; }
+          50% { opacity: 1; }
+          100% { opacity: 0.55; }
+        }
+        .subtle-pulse {
+          animation: subtle-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes ring-tilt {
+          0% { transform: rotate(0deg); }
+          6% { transform: rotate(-10deg); }
+          12% { transform: rotate(10deg); }
+          18% { transform: rotate(-8deg); }
+          24% { transform: rotate(8deg); }
+          30% { transform: rotate(-5deg); }
+          36% { transform: rotate(5deg); }
+          42% { transform: rotate(0deg); }
+          100% { transform: rotate(0deg); }
+        }
+        .ring-tilt {
+          animation: ring-tilt 1.8s ease-in-out infinite;
+          transform-origin: center center;
+        }
+        @keyframes recording-pulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .recording-pulse {
+          animation: recording-pulse 1s ease-in-out infinite;
         }
       `}</style>
       {/* Backdrop overlay */}
@@ -430,107 +846,275 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
             ref={messagesContainerRef}
             className="flex-1 overflow-y-auto min-h-0 p-4 pb-6 md:pb-4 scrollbar-thin"
           >
-            <div className="flex flex-col space-y-4">
-              {/* Intro sequence - only show connecting animation while connecting */}
-              {showIntro && introStep === 'connecting' && (
-                <div className="py-1 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                    Establishing connection with north pole{connectingDots}
-                  </div>
-                </div>
-              )}
-
-              {!showIntro && messages.length === 0 && (
-                <div className="text-center text-[#66ff66]/60 text-sm mt-8">
-                  <p className="mb-2">Well hello there! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
-                  <p>Ask me anything about Santa's 2024 flight!</p>
-                </div>
-              )}
-
-              {messages.map((message) => (
-                (message.role === 'assistant' && !message.content.trim() ? null : (
-                <div
-                  key={message.id}
-                  className={`${
-                    message.role === 'user'
-                      ? 'bg-[#33ff33] text-black self-end'
-                      : message.id?.startsWith('connection-') || message.id?.startsWith('entered-')
-                      ? 'text-[#66ff66] self-start py-0.5'
-                      : 'text-[#66ff66] self-start'
-                  } ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'p-3 rounded border border-[#33ff33]/30'} ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'max-w-[80%]'} ${message.id?.startsWith('connection-') ? 'mb-2' : ''}`}
-                >
-                  {message.role === 'assistant' && message.content.trim().length > 0 && !message.id?.startsWith('connection-') && !message.id?.startsWith('entered-') && (
-                    <div className="text-xs mb-1 opacity-70">
-                      Poppa Elf
+            {isSpeechMode ? (
+              <div className="flex flex-col items-center justify-center text-center text-[#66ff66] min-h-full gap-4">
+                <img
+                  src="/ChatGPT%20Image%20Dec%2010,%202025,%2007_29_20%20AM.png"
+                  alt="Poppa Elf"
+                  className={`w-40 h-40 object-contain transition-transform duration-500 ease-in-out ${isSpeaking ? 'speech-pulse' : ''}`}
+                />
+                {recordingState === 'recorded' && transcribedText ? (
+                  <div className="w-full max-w-md space-y-4">
+                    <div className="bg-[#33ff33] text-black p-3 rounded border border-[#33ff33]/30">
+                      <div className="text-xs mb-1 opacity-70">Your message:</div>
+                      <div className="text-sm whitespace-pre-wrap">{transcribedText}</div>
                     </div>
-                  )}
-                  {message.role === 'assistant' ? (
-                    message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? (
-                      <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                        {message.content}
-                      </div>
-                    ) : (
-                      <div className="text-sm prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown
-                          components={{
-                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }) => <strong className="font-bold text-[#66ff66]">{children}</strong>,
-                            em: ({ children }) => <em className="italic text-[#66ff66]/90">{children}</em>,
-                            ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                            ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
-                            li: ({ children }) => <li className="ml-2">{children}</li>,
-                            h1: ({ children }) => <h1 className="text-base font-bold mb-2">{children}</h1>,
-                            h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
-                            h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
-                            code: ({ children }) => <code className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                            blockquote: ({ children }) => <blockquote className="border-l-2 border-[#66ff66]/50 pl-2 italic">{children}</blockquote>,
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-                    )
-                  ) : (
-                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                  )}
-                </div>
-                ))
-              ))}
-
-              {isLoading && (
-                <div className="p-3 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
-                    Sending your message to the north pole...
                   </div>
+                ) : recordingState === 'recording' ? (
+                  <div className="max-w-md text-sm text-[#66ff66]/80 text-center">
+                    Recording...
+                  </div>
+                ) : (
+                  <div className="max-w-md text-sm text-[#66ff66]/80 text-center">
+                    {isSpeaking || isSpeechPreparing
+                      ? 'Poppa Elf is talking... Please wait before recording your message.'
+                      : 'Record your message for Poppa Elf'}
+                  </div>
+                )}
+                <button
+                  onClick={() => setIsSpeechMode(false)}
+                  className="text-xs px-3 py-1.5 border border-[#33ff33] text-[#33ff33] hover:bg-[#33ff33]/10 transition-colors cursor-pointer"
+                >
+                  Switch to chat
+                </button>
+                {speechPreview && (
+                  <div
+                    className={`bg-[#33ff33] text-black self-stretch w-full p-3 rounded border border-[#33ff33]/30 transition-opacity duration-500 ${
+                      speechPreview.status === 'fading' ? 'opacity-0' : 'opacity-100'
+                    }`}
+                  >
+                    <div className="text-xs mb-1 opacity-70">You</div>
+                    <div className="text-sm whitespace-pre-wrap">{speechPreview.content}</div>
+                  </div>
+                )}
+                {isSpeechMode && (
+                  <div className="text-xs uppercase tracking-wide text-[#33ff33] subtle-pulse">
+                    {isSpeaking
+                      ? 'Poppa Elf is talking...'
+                      : isSpeechPreparing
+                      ? 'Receiving satellite downlink...'
+                      : isLoading
+                      ? 'Sending your message to the north pole...'
+                      : isTranscribing
+                      ? 'Transcribing your message...'
+                      : firstAssistantReceived
+                      ? ''
+                      : 'CONNECTING TO THE NORTH POLE...'}
+                  </div>
+                )}
+              </div>
+            ) : showModeSelection ? (
+              <div className="flex flex-col items-center justify-center text-center text-[#66ff66] gap-3 min-h-full">
+                <div className="text-[11px] uppercase tracking-wide text-[#66ff66]/80">
+                  Incoming call from:
                 </div>
-              )}
-            </div>
+                <img
+                  src="/ChatGPT%20Image%20Dec%2010,%202025,%2007_29_20%20AM.png"
+                  alt="Poppa Elf"
+                  className="w-40 h-40 object-cover ring-tilt"
+                />
+                <div className="flex flex-col gap-3 w-full">
+                  <button
+                    onClick={() => handleModeSelection('speech')}
+                    className="flex items-center justify-center gap-2 w-full bg-[#33ff33] text-black border border-[#33ff33] hover:bg-[#66ff66] transition-colors px-4 py-3 cursor-pointer"
+                  >
+                    <PhoneIcon className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-sm font-semibold uppercase tracking-wide">Accept call</span>
+                  </button>
+                  <button
+                    onClick={() => handleModeSelection('chat')}
+                    className="flex items-center justify-center gap-2 w-full border border-[#33ff33] text-[#33ff33] hover:bg-[#33ff33]/10 transition-colors px-4 py-3 cursor-pointer"
+                  >
+                    <ChatBubbleLeftRightIcon className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-sm font-semibold uppercase tracking-wide">Chat with Poppa Elf</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col space-y-4">
+                {/* Intro sequence - only show connecting animation while connecting */}
+                {showIntro && introStep === 'connecting' && (
+                  <div className="py-1 self-start">
+                    <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                      Establishing connection with north pole{connectingDots}
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((message) => (
+                  (message.role === 'assistant' && !message.content.trim() ? null : (
+                  <div
+                    key={message.id}
+                    className={`${
+                      message.role === 'user'
+                        ? 'bg-[#33ff33] text-black self-end'
+                        : message.id?.startsWith('connection-') || message.id?.startsWith('entered-')
+                        ? 'text-[#66ff66] self-start py-0.5'
+                        : 'text-[#66ff66] self-start'
+                    } ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'p-3 rounded border border-[#33ff33]/30'} ${message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? '' : 'max-w-[80%]'} ${message.id?.startsWith('connection-') ? 'mb-2' : ''}`}
+                  >
+                    {message.role === 'assistant' && message.content.trim().length > 0 && !message.id?.startsWith('connection-') && !message.id?.startsWith('entered-') && (
+                      <div className="text-xs mb-1 opacity-70">
+                        Poppa Elf
+                      </div>
+                    )}
+                    {message.role === 'assistant' ? (
+                      message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? (
+                        <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                          {message.content}
+                        </div>
+                      ) : (
+                        <div className="text-sm prose prose-invert prose-sm max-w-none">
+                          <ReactMarkdown
+                            components={{
+                              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                              strong: ({ children }) => <strong className="font-bold text-[#66ff66]">{children}</strong>,
+                              em: ({ children }) => <em className="italic text-[#66ff66]/90">{children}</em>,
+                              ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                              ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                              li: ({ children }) => <li className="ml-2">{children}</li>,
+                              h1: ({ children }) => <h1 className="text-base font-bold mb-2">{children}</h1>,
+                              h2: ({ children }) => <h2 className="text-sm font-bold mb-1">{children}</h2>,
+                              h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                              code: ({ children }) => <code className="bg-black/30 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                              blockquote: ({ children }) => <blockquote className="border-l-2 border-[#66ff66]/50 pl-2 italic">{children}</blockquote>,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )
+                    ) : (
+                      <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                    )}
+                  </div>
+                  ))
+                ))}
+
+                {isLoading && (
+                  <div className="p-3 self-start">
+                    <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                      Sending your message to the north pole...
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Input area */}
           <div className="flex-shrink-0 p-3 border-t border-[#33ff33]/30 sticky bottom-0 left-0 right-0 bg-black">
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Poppa Elf..."
-                className="flex-1 bg-black border border-[#33ff33]/50 text-[#33ff33] text-base px-3 py-2 focus:outline-none focus:border-[#33ff33]"
-                disabled={isLoading || showIntro}
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading || showIntro}
-                className="bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                SEND
-              </button>
-            </form>
+            {isSpeechMode ? (
+              <div className="flex gap-2">
+                {recordingState === 'idle' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      disabled={isSpeaking || isSpeechPreparing || isLoading || showIntro || showModeSelection}
+                      aria-label="Start recording"
+                      className={`flex-1 text-xs px-4 py-3 cursor-pointer transition-colors flex items-center justify-center gap-2 ${
+                        isSpeaking || isSpeechPreparing || isLoading || showIntro || showModeSelection
+                          ? 'bg-black/50 text-[#33ff33]/40 border border-[#33ff33]/30 cursor-not-allowed'
+                          : 'bg-[#33ff33] text-black border border-[#33ff33] hover:bg-[#66ff66]'
+                      }`}
+                    >
+                      <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+                      <span className="font-semibold uppercase tracking-wide">
+                        {isSpeaking || isSpeechPreparing || isLoading ? 'Waiting...' : 'Record'}
+                      </span>
+                    </button>
+                  </>
+                ) : recordingState === 'recording' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      aria-label="Stop recording"
+                      className="flex-1 bg-red-600 text-white border border-red-600 hover:bg-red-700 transition-colors text-xs px-4 py-3 cursor-pointer flex items-center justify-center gap-2 recording-pulse"
+                    >
+                      <StopIcon className="h-5 w-5" aria-hidden="true" />
+                      <span className="font-semibold uppercase tracking-wide">Stop</span>
+                    </button>
+                  </>
+                ) : recordingState === 'recorded' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCancelRecording}
+                      aria-label="Cancel recording"
+                      className="border border-[#33ff33] text-[#33ff33] hover:bg-[#33ff33]/10 transition-colors text-xs px-4 py-3 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                      <span className="font-semibold uppercase tracking-wide">Cancel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendTranscription}
+                      disabled={!transcribedText.trim() || isTranscribing || isLoading}
+                      aria-label="Send transcribed message"
+                      className="flex-1 bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-4 py-3 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer font-semibold uppercase tracking-wide"
+                    >
+                      {isTranscribing ? 'Transcribing...' : 'Send'}
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsSpeechMode(false)}
+                  disabled={showModeSelection}
+                  aria-label="Switch to chat mode"
+                  className={`border text-xs px-3 py-2 cursor-pointer transition-colors flex items-center justify-center ${
+                    isSpeechMode
+                      ? 'bg-black text-[#33ff33] border-[#33ff33] hover:bg-[#33ff33]/10'
+                      : 'bg-black text-[#33ff33] border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                  } ${showModeSelection ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  {isSpeechMode ? (
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <PhoneIcon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask Poppa Elf..."
+                  className="flex-1 bg-black border border-[#33ff33]/50 text-[#33ff33] text-base px-3 py-2 focus:outline-none focus:border-[#33ff33]"
+                  disabled={isLoading || showIntro || showModeSelection}
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading || showIntro || showModeSelection}
+                  className="bg-[#33ff33] text-black border border-[#33ff33] hover:bg-black hover:text-[#33ff33] transition-colors text-xs px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  SEND
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSpeechMode(prev => !prev)}
+                  disabled={showModeSelection}
+                  aria-label="Toggle phone call mode"
+                  className={`border text-xs px-3 py-2 cursor-pointer transition-colors flex items-center justify-center ${
+                    isSpeechMode
+                      ? 'bg-[#33ff33] text-black border-[#33ff33]'
+                      : 'bg-black text-[#33ff33] border-[#33ff33] hover:bg-[#33ff33] hover:text-black'
+                  } ${showModeSelection ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <PhoneIcon className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
     </>
   )
 }
+
 
