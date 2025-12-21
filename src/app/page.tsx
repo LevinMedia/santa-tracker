@@ -1078,6 +1078,43 @@ function HomeContent() {
 
         appendOptionsEntry()
         setShowPrompt(true)
+      } else if (normalized === 'D') {
+        setIsProcessing(true)
+        setShowPrompt(false)
+        setActiveOptionsId(null)
+
+        appendEntry({
+          id: `cmd-d-${Date.now()}`,
+          kind: 'text',
+          text: "> COMMAND [D] DONATE FOR PARKINSON'S RESEARCH",
+        })
+
+        await sleep(200)
+
+        appendEntry({
+          id: `donate-open-${Date.now()}`,
+          kind: 'text',
+          text: 'OPENING DONATION PAGE IN A NEW TAB...',
+          className: 'mb-10',
+        })
+
+        if (typeof window !== 'undefined') {
+          window.open(
+            'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout',
+            '_blank',
+            'noopener,noreferrer'
+          )
+        }
+
+        await sleep(300)
+
+        appendEntry({
+          id: `divider-${Date.now()}`,
+          kind: 'hr',
+        })
+
+        appendOptionsEntry()
+        setShowPrompt(true)
       } else if (normalized === 'P') {
         setIsPoppaElfOpen(prev => !prev)
         return
