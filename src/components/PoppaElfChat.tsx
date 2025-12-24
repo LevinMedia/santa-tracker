@@ -435,7 +435,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
               {/* Intro sequence - only show connecting animation while connecting */}
               {showIntro && introStep === 'connecting' && (
                 <div className="py-1 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                  <div className="pulse-roll-text whitespace-pre-wrap break-words" style={{ fontSize: '12px' }}>
                     Establishing connection with north pole{connectingDots}
                   </div>
                 </div>
@@ -467,7 +467,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
                   )}
                   {message.role === 'assistant' ? (
                     message.id?.startsWith('connection-') || message.id?.startsWith('entered-') ? (
-                      <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                      <div className="pulse-roll-text whitespace-pre-wrap break-words" style={{ fontSize: '12px' }}>
                         {message.content}
                       </div>
                     ) : (
@@ -500,7 +500,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
 
               {isLoading && (
                 <div className="p-3 self-start">
-                  <div className="pulse-roll-text whitespace-nowrap" style={{ fontSize: '12px' }}>
+                  <div className="pulse-roll-text whitespace-pre-wrap break-words" style={{ fontSize: '12px' }}>
                     Sending your message to the north pole...
                   </div>
                 </div>
