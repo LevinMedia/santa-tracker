@@ -77,7 +77,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       }
       setMessages([connectionMsg])
 
-      // Step 2: "Poppa Elf has entered the chat" (0.5 seconds)
+      // Step 2: "Poppa Elf has entered the chat - Santa and his team deeply respect your privacy. Your messages to and from Poppa Elf are not visible to the creator of this site. They are saved on your phone or computer and only sent to OpenAI to translate from your language into “Elf” then back again. Clicking clear deletes your message history forever. 🫶" (0.5 seconds)
       setIntroStep('entered')
       await new Promise(resolve => setTimeout(resolve, 500))
 
@@ -85,7 +85,8 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
       const enteredMsg: Message = {
         id: `entered-${Date.now()}`,
         role: 'assistant',
-        content: 'Poppa Elf has entered the chat',
+        content:
+          'Poppa Elf has entered the chat - Santa and his team deeply respect your privacy. Your messages to and from Poppa Elf are not visible to the creator of this site. They are saved on your phone or computer and only sent to OpenAI to translate from your language into “Elf” then back again. Clicking clear deletes your message history forever. 🫶',
         timestamp: new Date()
       }
       setMessages(prev => [...prev, enteredMsg])
