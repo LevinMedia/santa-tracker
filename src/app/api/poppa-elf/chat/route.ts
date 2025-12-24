@@ -205,7 +205,6 @@ export async function POST(req: NextRequest) {
     console.log('[Poppa Elf API] Agent result:', {
       hasOutput: !!result.finalOutput,
       outputLength: result.finalOutput?.length || 0,
-      outputPreview: result.finalOutput?.substring(0, 200) || 'no output',
     })
 
     // Track Poppa Elf responses
