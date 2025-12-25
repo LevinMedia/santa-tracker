@@ -303,22 +303,22 @@ const MENU_ITEMS: MenuItem[] = [
 
 const COMMAND_OPTIONS: CommandOption[] = [
   {
-    key: 'R',
-    label: `Watch ${previousFlightYear} Santa tracker replay`,
-    href: `/map?flight=${previousFlightYear}_santa_tracker&mode=replay`,
-    delay: 5200,
-  },
-  { key: 'P', label: 'ASK POPPA ELF (FAQ)', href: '#', delay: 5250 },
-  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5300, external: true },
-  { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5350 },
-  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5450 },
-  {
     key: '5',
     label: `Watch ${currentFlightYear} Santa tracker replay`,
     href: `/map?flight=${currentFlightYear}_santa_tracker&mode=replay`,
-    delay: 5500,
+    delay: 5200,
   },
-  { key: 'Q', label: 'QUIT', href: '/quit', delay: 5550 },
+  {
+    key: 'R',
+    label: `Watch ${previousFlightYear} Santa tracker replay`,
+    href: `/map?flight=${previousFlightYear}_santa_tracker&mode=replay`,
+    delay: 5250,
+  },
+  { key: 'P', label: 'ASK POPPA ELF (FAQ)', href: '#', delay: 5300 },
+  { key: 'D', label: "Donate for Parkinson's research", href: 'https://give.michaeljfox.org/give/f6860349/#!/donation/checkout', delay: 5350, external: true },
+  { key: 'S', label: 'SHARE SANTA TRACKER', href: '/share', delay: 5400 },
+  { key: 'A', label: 'ABOUT THIS PROJECT', href: '/about', delay: 5450 },
+  { key: 'Q', label: 'QUIT', href: '/quit', delay: 5500 },
 ]
 
 const ABOUT_TEXT = `---
