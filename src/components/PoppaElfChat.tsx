@@ -444,7 +444,7 @@ export default function PoppaElfChat({ isOpen, onClose }: PoppaElfChatProps) {
               {!showIntro && messages.length === 0 && (
                 <div className="text-center text-[#66ff66]/60 text-sm mt-8">
                   <p className="mb-2">Well hello there! I'm Poppa Elf, the oldest and wisest elf at the North Pole.</p>
-                  <p>Ask me anything about Santa's 2024 flight!</p>
+                  <p>Ask me anything about Santa's 2025 flight! I can compare to 2024 if you like.</p>
                 </div>
               )}
 

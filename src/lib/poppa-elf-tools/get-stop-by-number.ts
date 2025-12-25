@@ -1,15 +1,15 @@
 import { tool } from '@openai/agents'
-import { getStopByNumber } from '@/lib/flight-data'
+import { getStopByNumber, FlightYear } from '@/lib/flight-data'
 
 /**
  * Tool: Get stop by number
  * 
- * Retrieves detailed information about a specific stop from Santa's 2024 flight
+ * Retrieves detailed information about a specific stop from Santa's 2025 flight
  * by stop number. Use this when the user asks about a specific stop number.
  */
 export const getStopByNumberTool = tool({
   name: 'get_stop_by_number',
-  description: `Get detailed information about a specific stop from Santa's 2024 flight by stop number. Use this when the user asks about a specific stop number (e.g., "What was stop number 1000?" or "Tell me about stop 500").`,
+  description: `Get detailed information about a specific stop from Santa's 2025 flight by stop number. Use this when the user asks about a specific stop number (e.g., "What was stop number 1000?" or "Tell me about stop 500"). Default to 2025 data unless the user explicitly asks for 2024 as a comparison.`,
   parameters: {
     type: 'object' as const,
     properties: {
@@ -17,18 +17,24 @@ export const getStopByNumberTool = tool({
         type: 'number' as const,
         description: 'The stop number to look up (e.g., 1000, 500, 2500)',
       },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to query. Defaults to 2025 unless a user specifically requests 2024.',
+      },
     },
     required: ['stop_number'],
     additionalProperties: false as const,
   },
   strict: true,
   execute: async (input: unknown) => {
-    const args = input as { stop_number: number }
+    const args = input as { stop_number: number; year?: FlightYear }
     const { stop_number } = args
-    const stop = getStopByNumber(stop_number)
-    
+    const year: FlightYear = args.year === 2024 ? 2024 : 2025
+    const stop = await getStopByNumber(stop_number, year)
+
     if (!stop) {
-      return `Stop number ${stop_number} was not found in Santa's 2024 flight records.`
+      return `Stop number ${stop_number} was not found in Santa's ${year} flight records.`
     }
     
     // Format the stop data in a readable way

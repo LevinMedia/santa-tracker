@@ -1,10 +1,10 @@
 import { tool } from '@openai/agents'
-import { searchStopsByUTCTime, parseTime, parseTimezone, localTimeToUTC } from '@/lib/flight-data'
+import { searchStopsByUTCTime, parseTime, parseTimezone, localTimeToUTC, FlightYear } from '@/lib/flight-data'
 
 /**
  * Tool: Get stops by time
  * 
- * Searches for stops in Santa's 2024 flight at a specific time.
+ * Searches for stops in Santa's 2025 flight at a specific time.
  * Converts the query time to UTC, then finds all stops at that UTC moment,
  * showing what the local time was at each stop.
  * 
@@ -15,7 +15,7 @@ import { searchStopsByUTCTime, parseTime, parseTimezone, localTimeToUTC } from '
  */
 export const getStopsByTimeTool = tool({
   name: 'get_stops_by_time',
-  description: `Find stops in Santa's 2024 flight at a specific time. Use this when the user asks about where Santa was at a specific time in a specific timezone (e.g., "Where was Santa at 10pm EST?", "Where was Santa at 10pm in California?", "Where was Santa at 10pm PST?"). The tool converts the query time to UTC and finds all stops at that moment, showing what the local time was at each location. If no timezone is specified, assume UTC.`,
+  description: `Find stops in Santa's 2025 flight at a specific time. Use this when the user asks about where Santa was at a specific time in a specific timezone (e.g., "Where was Santa at 10pm EST?", "Where was Santa at 10pm in California?", "Where was Santa at 10pm PST?"). Default to the 2025 data unless someone specifically asks about 2024 for comparison. The tool converts the query time to UTC and finds all stops at that moment, showing what the local time was at each location. If no timezone is specified, assume UTC.`,
   parameters: {
     type: 'object' as const,
     properties: {
@@ -27,14 +27,20 @@ export const getStopsByTimeTool = tool({
         type: 'string' as const,
         description: 'The timezone for the query time (e.g., "EST", "PST", "UTC", "UTC-5", "California", "PST"). Required but can be empty string "" to assume UTC.',
       },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to search. Defaults to 2025 unless the user requests 2024.',
+      },
     },
     required: ['time', 'timezone'] as const,
     additionalProperties: false as const,
   },
   strict: true,
   execute: async (input: unknown) => {
-    const args = input as { time: string; timezone: string }
+    const args = input as { time: string; timezone: string; year?: FlightYear }
     const { time, timezone } = args
+    const year: FlightYear = args.year === 2024 ? 2024 : 2025
     
     // Treat empty timezone as UTC
     const timezoneToUse = timezone?.trim() || ''
@@ -83,10 +89,10 @@ export const getStopsByTimeTool = tool({
     const utcHour = localTimeToUTC(localHour, queryUTCOffset)
     
     // Search for stops at this UTC time
-    const stops = searchStopsByUTCTime(utcHour)
+    const stops = await searchStopsByUTCTime(utcHour, year)
     
     if (stops.length === 0) {
-      return `No stops found at ${time} ${timezoneLabel} (${utcHour}:00 UTC) in Santa's 2024 flight records.`
+      return `No stops found at ${time} ${timezoneLabel} (${utcHour}:00 UTC) in Santa's ${year} flight records.`
     }
     
     // Group stops by country and state/province for a summary view

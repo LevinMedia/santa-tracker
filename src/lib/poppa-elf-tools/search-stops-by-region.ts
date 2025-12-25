@@ -1,10 +1,10 @@
 import { tool } from '@openai/agents'
-import { searchStopsByRegion, REGION_BOUNDS, FlightStop } from '@/lib/flight-data'
+import { searchStopsByRegion, REGION_BOUNDS, FlightStop, FlightYear } from '@/lib/flight-data'
 
 /**
  * Tool: Search stops by geographic region
  * 
- * Finds stops in Santa's 2024 flight within a specific geographic region.
+ * Finds stops in Santa's 2025 flight within a specific geographic region.
  * Supports common regions like "west coast", "east coast", "midwest", "Pacific Northwest",
  * "New England", continents, countries, etc.
  * 
@@ -16,13 +16,18 @@ import { searchStopsByRegion, REGION_BOUNDS, FlightStop } from '@/lib/flight-dat
  */
 export const searchStopsByRegionTool = tool({
   name: 'search_stops_by_region',
-  description: `Search for stops in Santa's 2024 flight by geographic region. Supports regions like "west coast", "east coast", "midwest", "Pacific Northwest", "New England", continents (e.g., "Europe", "Asia", "North America"), countries (e.g., "United States", "Canada", "Japan"), and other common geographic regions. Use this when the user asks about stops in a broad geographic area (e.g., "Where was Santa on the west coast?", "What stops were in Europe?", "How many stops in the Pacific Northwest?").`,
+  description: `Search for stops in Santa's 2025 flight by geographic region. Supports regions like "west coast", "east coast", "midwest", "Pacific Northwest", "New England", continents (e.g., "Europe", "Asia", "North America"), countries (e.g., "United States", "Canada", "Japan"), and other common geographic regions. Default to the 2025 data unless the user explicitly asks for 2024 to compare. Use this when the user asks about stops in a broad geographic area (e.g., "Where was Santa on the west coast?", "What stops were in Europe?", "How many stops in the Pacific Northwest?").`,
   parameters: {
     type: 'object' as const,
     properties: {
       region: {
         type: 'string' as const,
         description: 'The geographic region name (e.g., "west coast", "east coast", "midwest", "Pacific Northwest", "New England", "Europe", "Asia", "United States", "Canada", etc.). Case-insensitive.',
+      },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to search. Defaults to 2025 unless the user requests 2024.',
       },
     },
     required: ['region'] as const,
@@ -31,8 +36,9 @@ export const searchStopsByRegionTool = tool({
   strict: true,
   execute: async (input: unknown) => {
     console.log('[search_stops_by_region] Tool called with input:', JSON.stringify(input))
-    const args = input as { region: string }
+    const args = input as { region: string; year?: FlightYear }
     const { region } = args
+    const year: FlightYear = args.year === 2024 ? 2024 : 2025
     
     if (!region || !region.trim()) {
       console.log('[search_stops_by_region] Error: No region provided')
@@ -54,10 +60,10 @@ export const searchStopsByRegionTool = tool({
       if (matchingRegion) {
         console.log(`[search_stops_by_region] Found partial match: "${matchingRegion}"`)
         const matchedBounds = REGION_BOUNDS[matchingRegion]
-        const stops = searchStopsByRegion(matchedBounds)
-        
+        const stops = await searchStopsByRegion(matchedBounds, year)
+
         if (stops.length === 0) {
-          return `No stops found in the ${matchingRegion} region during Santa's 2024 flight.`
+          return `No stops found in the ${matchingRegion} region during Santa's ${year} flight.`
         }
         
         return formatStopsResponse(stops, matchingRegion)
@@ -75,14 +81,14 @@ export const searchStopsByRegionTool = tool({
     
     // Search for stops in the region
     console.log(`[search_stops_by_region] Found bounds for "${regionName}":`, bounds)
-    const stops = searchStopsByRegion(bounds)
+    const stops = await searchStopsByRegion(bounds, year)
     console.log(`[search_stops_by_region] Found ${stops.length} stops in region`)
-    
+
     if (stops.length === 0) {
-      return `No stops found in the ${region} region during Santa's 2024 flight.`
+      return `No stops found in the ${region} region during Santa's ${year} flight.`
     }
-    
-    return formatStopsResponse(stops, region)
+
+    return formatStopsResponse(stops, region, year)
   },
 })
 
@@ -90,7 +96,7 @@ export const searchStopsByRegionTool = tool({
  * Format stops response for display
  * For result sets with more than 5 stops, provides a summary instead of listing individual stops
  */
-function formatStopsResponse(stops: FlightStop[], region: string): string {
+function formatStopsResponse(stops: FlightStop[], region: string, year: FlightYear): string {
   const MAX_DISPLAY_STOPS = 5 // Maximum number of stops to show in detail
   
   // For large result sets, provide a summary
@@ -104,7 +110,7 @@ function formatStopsResponse(stops: FlightStop[], region: string): string {
     const countryList = Array.from(countries).sort()
     const countryCount = countryList.length
     
-    let response = `Oh my snowflakes! Santa visited ${countryList.length} countr${countryCount === 1 ? 'y' : 'ies'} in the ${region} region during his 2024 flight, for a total of ${stops.length.toLocaleString()} stop${stops.length === 1 ? '' : 's'}!\n\n`
+    let response = `Oh my snowflakes! Santa visited ${countryList.length} countr${countryCount === 1 ? 'y' : 'ies'} in the ${region} region during his ${year} flight, for a total of ${stops.length.toLocaleString()} stop${stops.length === 1 ? '' : 's'}!\n\n`
     
     // Show a sample of countries (limit to first 10 for readability)
     const displayCountries = countryList.slice(0, 10)

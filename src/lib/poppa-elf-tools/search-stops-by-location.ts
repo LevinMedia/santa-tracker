@@ -1,17 +1,17 @@
 import { tool } from '@openai/agents'
-import { searchStopsByLocation } from '@/lib/flight-data'
+import { searchStopsByLocation, FlightYear } from '@/lib/flight-data'
 
 /**
  * Tool: Search stops by location
  * 
- * Searches for stops in Santa's 2024 flight by city, country, or state/province.
+ * Searches for stops in Santa's 2025 flight by city, country, or state/province.
  * Uses exact matching (case-insensitive). Use this when the user asks about
  * when Santa visited a specific location (e.g., "When was Santa in New York?",
  * "What stops were in France?", "When did Santa visit California?").
  */
 export const searchStopsByLocationTool = tool({
   name: 'search_stops_by_location',
-  description: `Search for stops in Santa's 2024 flight by city, country, or state/province using exact matching (case-insensitive). Use this when the user asks about when Santa visited a specific location and you know it's likely in the exact stop list (e.g., "When was Santa in New York?", "What stops were in France?"). IMPORTANT: If this returns "No stops found", use find_nearest_stop_by_location_name instead - it will automatically geocode and find the nearest stop.`,
+  description: `Search for stops in Santa's 2025 flight by city, country, or state/province using exact matching (case-insensitive). Use this when the user asks about when Santa visited a specific location and you know it's likely in the exact stop list (e.g., "When was Santa in New York?", "What stops were in France?"). Default to the 2025 data unless the user explicitly references 2024 for comparison. IMPORTANT: If this returns "No stops found", use find_nearest_stop_by_location_name instead - it will automatically geocode and find the nearest stop.`,
   parameters: {
     type: 'object' as const,
     properties: {
@@ -27,24 +27,31 @@ export const searchStopsByLocationTool = tool({
         type: 'string' as const,
         description: 'The state or province name to search for (exact match, case-insensitive). Optional if searching by city or country.',
       },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to query. Defaults to 2025 unless the user asks for 2024.',
+      },
     },
     required: [] as const,
     additionalProperties: false as const,
   },
   strict: false,
   execute: async (input: unknown) => {
-    const args = input as { city?: string; country?: string; state_province?: string }
+    const args = input as { city?: string; country?: string; state_province?: string; year?: FlightYear }
     const { city, country, state_province } = args
+    const year: FlightYear = args.year === 2024 ? 2024 : 2025
     
     // At least one search parameter must be provided
     if (!city && !country && !state_province) {
       return 'Please provide at least one search parameter: city, country, or state_province.'
     }
     
-    const stops = searchStopsByLocation({
+    const stops = await searchStopsByLocation({
       city: city?.trim(),
       country: country?.trim(),
       state_province: state_province?.trim(),
+      year,
     })
     
     if (stops.length === 0) {
@@ -53,7 +60,7 @@ export const searchStopsByLocationTool = tool({
       if (country) searchTerms.push(`country "${country}"`)
       if (state_province) searchTerms.push(`state/province "${state_province}"`)
       
-      return `No stops found matching ${searchTerms.join(', ')} in Santa's 2024 flight records.`
+      return `No stops found matching ${searchTerms.join(', ')} in Santa's ${year} flight records.`
     }
     
     const MAX_DISPLAY_STOPS = 5 // Maximum number of stops to show in detail
@@ -79,7 +86,7 @@ export const searchStopsByLocationTool = tool({
       if (country) searchDesc.push(`country "${country}"`)
       const searchDescription = searchDesc.join(' in ')
       
-      let response = `Oh my snowflakes! Santa made ${stops.length.toLocaleString()} stop${stops.length === 1 ? '' : 's'} in ${searchDescription} during his 2024 flight!\n\n`
+      let response = `Oh my snowflakes! Santa made ${stops.length.toLocaleString()} stop${stops.length === 1 ? '' : 's'} in ${searchDescription} during his ${year} flight!\n\n`
       
       // Show a sample of locations (limit to first 10 for readability)
       const displayLocations = locationList.slice(0, 10)

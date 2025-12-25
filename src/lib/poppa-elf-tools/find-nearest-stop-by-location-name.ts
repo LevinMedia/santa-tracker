@@ -1,6 +1,5 @@
 import { tool } from '@openai/agents'
-import { loadFlightData, haversineDistanceKm, FlightStop } from '@/lib/flight-data'
-import { searchStopsByLocation } from '@/lib/flight-data'
+import { loadFlightData, haversineDistanceKm, FlightStop, FlightYear, searchStopsByLocation } from '@/lib/flight-data'
 
 // Rate limiting: Photon geocoding service - ensure at least 1 second between requests
 // Use a promise queue to serialize requests and prevent race conditions
@@ -105,13 +104,18 @@ async function geocodeLocation(locationName: string): Promise<Array<{
  */
 export const findNearestStopByLocationNameTool = tool({
   name: 'find_nearest_stop_by_location_name',
-  description: `Find the nearest stop from Santa's 2024 flight to a location name. This tool automatically: 1) First searches for exact matches in Santa's stop list, 2) If not found, geocodes the location name, 3) Finds the nearest stop to those coordinates. Use this when the user asks "When was Santa in [location]?" or "Did Santa stop in [location]?" - especially for locations that might not be in the exact stop list (e.g., "Teahupoo", "Mount Everest", specific landmarks). This is the PRIMARY tool to use for location queries that don't return exact matches.`,
+  description: `Find the nearest stop from Santa's 2025 flight to a location name. This tool automatically: 1) First searches for exact matches in Santa's stop list, 2) If not found, geocodes the location name, 3) Finds the nearest stop to those coordinates. Default to 2025 data unless the user specifically requests 2024 for comparison. Use this when the user asks "When was Santa in [location]?" or "Did Santa stop in [location]?" - especially for locations that might not be in the exact stop list (e.g., "Teahupoo", "Mount Everest", specific landmarks). This is the PRIMARY tool to use for location queries that don't return exact matches.`,
   parameters: {
     type: 'object' as const,
     properties: {
       location_name: {
         type: 'string' as const,
         description: 'The location name to search for (e.g., "Teahupoo", "Mount Everest", "Springfield", "Paris")',
+      },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to search. Defaults to 2025 unless the user requests 2024.',
       },
     },
     required: ['location_name'] as const,
@@ -120,8 +124,9 @@ export const findNearestStopByLocationNameTool = tool({
   strict: true,
   execute: async (input: unknown) => {
     console.log('[find_nearest_stop_by_location_name] Tool called with input:', JSON.stringify(input))
-    const args = input as { location_name: string }
+    const args = input as { location_name: string; year?: FlightYear }
     const { location_name } = args
+    const year: FlightYear = args.year === 2024 ? 2024 : 2025
     
     if (!location_name || !location_name.trim()) {
       console.log('[find_nearest_stop_by_location_name] Error: No location name provided')
@@ -133,16 +138,18 @@ export const findNearestStopByLocationNameTool = tool({
     
     // Step 1: Try exact search first (by city, then by country)
     console.log(`[find_nearest_stop_by_location_name] Step 1: Trying exact city search for "${locationName}"`)
-    const exactMatches = searchStopsByLocation({
+    const exactMatches = await searchStopsByLocation({
       city: locationName,
+      year,
     })
     console.log(`[find_nearest_stop_by_location_name] Exact city matches: ${exactMatches.length}`)
     
     // If no city match, try country
     if (exactMatches.length === 0) {
       console.log(`[find_nearest_stop_by_location_name] Step 1b: Trying exact country search for "${locationName}"`)
-      const countryMatches = searchStopsByLocation({
+      const countryMatches = await searchStopsByLocation({
         country: locationName,
+        year,
       })
       console.log(`[find_nearest_stop_by_location_name] Exact country matches: ${countryMatches.length}`)
       if (countryMatches.length > 0) {
@@ -191,7 +198,7 @@ export const findNearestStopByLocationNameTool = tool({
       
       // Step 3: Find nearest stop to the geocoded coordinates
       console.log(`[find_nearest_stop_by_location_name] Step 3: Finding nearest stop to coordinates ${bestCandidate.lat}, ${bestCandidate.lon}`)
-      const stops = loadFlightData()
+      const stops = await loadFlightData(year)
       console.log(`[find_nearest_stop_by_location_name] Loaded ${stops.length} stops from flight data`)
       if (stops.length === 0) {
         console.log('[find_nearest_stop_by_location_name] Error: No flight data available')

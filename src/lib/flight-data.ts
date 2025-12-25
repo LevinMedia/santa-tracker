@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 /**
  * Flight stop data structure matching the CSV format
@@ -23,6 +24,12 @@ export interface FlightStop {
   wind_direction_deg?: number
   wind_gust_mps?: number
 }
+
+export type FlightYear = 2024 | 2025
+
+const DEFAULT_FLIGHT_YEAR: FlightYear = 2025
+
+type WeatherRow = Pick<FlightStop, 'temperature_c' | 'weather_condition' | 'wind_speed_mps' | 'wind_direction_deg' | 'wind_gust_mps'>
 
 /**
  * Parse a CSV line handling quoted fields
@@ -48,7 +55,7 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Parse the 2024 Santa Tracker CSV file
+ * Parse a Santa Tracker CSV file
  * CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone,
  *              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, 11-population
  *              12-temperature_c, 13-weather_condition, 14-wind_speed_mps, 15-wind_direction_deg, 16-wind_gust_mps
@@ -98,23 +105,94 @@ function parseFlightData(csvContent: string): FlightStop[] {
   return stops
 }
 
-// Cache for parsed flight data
-let cachedStops: FlightStop[] | null = null
+// Cache for parsed flight data by year
+const cachedStops: Partial<Record<FlightYear, FlightStop[]>> = {}
+
+// Cache for Supabase weather data by year
+const cachedWeather: Partial<Record<FlightYear, Promise<Record<number, WeatherRow>>>> = {}
+
+function getCsvPath(year: FlightYear): string {
+  return join(process.cwd(), 'public', `${year}_santa_tracker.csv`)
+}
+
+async function fetchSupabaseWeather(year: FlightYear): Promise<Record<number, WeatherRow>> {
+  if (year !== 2025) {
+    return {}
+  }
+
+  if (cachedWeather[year]) {
+    return cachedWeather[year]!
+  }
+
+  const weatherPromise = (async () => {
+    try {
+      const supabase = createAdminClient()
+      const { data, error } = await supabase
+        .from('live_weather')
+        .select('stop_number, temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
+
+      if (error || !data) {
+        console.error('Error fetching Supabase weather data:', error)
+        return {}
+      }
+
+      return data.reduce<Record<number, WeatherRow>>((acc, row) => {
+        if (row.stop_number !== null && row.stop_number !== undefined) {
+          acc[row.stop_number] = {
+            temperature_c: row.temperature_c ?? undefined,
+            weather_condition: row.weather_condition ?? undefined,
+            wind_speed_mps: row.wind_speed_mps ?? undefined,
+            wind_direction_deg: row.wind_direction_deg ?? undefined,
+            wind_gust_mps: row.wind_gust_mps ?? undefined,
+          }
+        }
+        return acc
+      }, {})
+    } catch (error) {
+      console.error('Unexpected error fetching Supabase weather:', error)
+      return {}
+    }
+  })()
+
+  cachedWeather[year] = weatherPromise
+  return weatherPromise
+}
+
+function applyWeatherData(stops: FlightStop[], weatherMap: Record<number, WeatherRow>): FlightStop[] {
+  if (!weatherMap || Object.keys(weatherMap).length === 0) {
+    return stops
+  }
+
+  return stops.map(stop => {
+    const weather = weatherMap[stop.stop_number]
+    if (!weather) return stop
+
+    return {
+      ...stop,
+      ...weather,
+    }
+  })
+}
 
 /**
  * Load and cache flight data from the CSV file
  * This is called once and cached in memory for performance
  */
-export function loadFlightData(): FlightStop[] {
-  if (cachedStops) {
-    return cachedStops
+export async function loadFlightData(year: FlightYear = DEFAULT_FLIGHT_YEAR): Promise<FlightStop[]> {
+  if (cachedStops[year]) {
+    return cachedStops[year]!
   }
-  
-  const csvPath = join(process.cwd(), 'public', '2024_santa_tracker.csv')
+
+  const csvPath = getCsvPath(year)
   const csvContent = readFileSync(csvPath, 'utf-8')
-  cachedStops = parseFlightData(csvContent)
-  
-  return cachedStops
+  const parsedStops = parseFlightData(csvContent)
+
+  const weatherMap = await fetchSupabaseWeather(year)
+  const stopsWithWeather = applyWeatherData(parsedStops, weatherMap)
+
+  cachedStops[year] = stopsWithWeather
+
+  return stopsWithWeather
 }
 
 /**
@@ -122,8 +200,8 @@ export function loadFlightData(): FlightStop[] {
  * @param stopNumber The stop number to look up
  * @returns The flight stop data or null if not found
  */
-export function getStopByNumber(stopNumber: number): FlightStop | null {
-  const stops = loadFlightData()
+export async function getStopByNumber(stopNumber: number, year: FlightYear = DEFAULT_FLIGHT_YEAR): Promise<FlightStop | null> {
+  const stops = await loadFlightData(year)
   const stop = stops.find(s => s.stop_number === stopNumber)
   return stop || null
 }
@@ -133,12 +211,13 @@ export function getStopByNumber(stopNumber: number): FlightStop | null {
  * @param options Search options with city, country, and/or state_province
  * @returns Array of matching flight stops
  */
-export function searchStopsByLocation(options: {
+export async function searchStopsByLocation(options: {
   city?: string
   country?: string
   state_province?: string
-}): FlightStop[] {
-  const stops = loadFlightData()
+  year?: FlightYear
+}): Promise<FlightStop[]> {
+  const stops = await loadFlightData(options.year ?? DEFAULT_FLIGHT_YEAR)
   
   return stops.filter(stop => {
     if (options.city && stop.city.toLowerCase() !== options.city.toLowerCase()) {
@@ -254,12 +333,12 @@ export function parseTime(timeStr: string): number | null {
  * @param utcHour Hour in UTC (0-23)
  * @returns Array of matching flight stops
  */
-export function searchStopsByUTCTime(utcHour: number): FlightStop[] {
-  const stops = loadFlightData()
+export async function searchStopsByUTCTime(utcHour: number, year: FlightYear = DEFAULT_FLIGHT_YEAR): Promise<FlightStop[]> {
+  const stops = await loadFlightData(year)
   
   return stops.filter(stop => {
     // Parse the UTC time to get the hour
-    // Format: "2024-12-24 23:31:45"
+    // Format: "2025-12-24 23:31:45"
     const timeMatch = stop.utc_time.match(/\d{4}-\d{2}-\d{2}\s+(\d{2}):\d{2}:\d{2}/)
     if (!timeMatch) {
       return false
@@ -316,7 +395,7 @@ export function haversineDistanceKm(lat1: number, lng1: number, lat2: number, ln
 
 /**
  * Parse UTC time string to timestamp
- * @param utcTime UTC time string (e.g., "2024-12-24 23:31:45")
+ * @param utcTime UTC time string (e.g., "2025-12-24 23:31:45")
  * @returns Timestamp in milliseconds
  */
 function parseUTCTime(utcTime: string): number {
@@ -387,8 +466,8 @@ export const REGION_BOUNDS: Record<string, RegionBounds> = {
  * @param bounds Region bounds (minLat, maxLat, minLng, maxLng)
  * @returns Array of matching flight stops within the bounds
  */
-export function searchStopsByRegion(bounds: RegionBounds): FlightStop[] {
-  const stops = loadFlightData()
+export async function searchStopsByRegion(bounds: RegionBounds, year: FlightYear = DEFAULT_FLIGHT_YEAR): Promise<FlightStop[]> {
+  const stops = await loadFlightData(year)
   
   return stops.filter(stop => {
     return stop.lat >= bounds.minLat &&

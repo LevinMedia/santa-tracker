@@ -1,10 +1,10 @@
 import { tool } from '@openai/agents'
-import { loadFlightData, searchStopsByLocation, haversineDistanceKm, FlightStop } from '@/lib/flight-data'
+import { loadFlightData, searchStopsByLocation, haversineDistanceKm, FlightStop, FlightYear } from '@/lib/flight-data'
 
 /**
  * Tool: Calculate statistics
  * 
- * Calculates various statistics about Santa's 2024 flight, such as:
+ * Calculates various statistics about Santa's 2025 flight, such as:
  * - Total number of stops
  * - Average speed
  * - Total distance traveled
@@ -19,7 +19,7 @@ import { loadFlightData, searchStopsByLocation, haversineDistanceKm, FlightStop 
  */
 export const calculateStatisticsTool = tool({
   name: 'calculate_statistics',
-  description: `Calculate statistics about Santa's 2024 flight. Use this when the user asks about total stops, average speed, distance traveled, or statistics filtered by location (e.g., "How many stops did Santa make?", "How many stops in California?", "What was Santa's average speed through California?"). You can filter by city, country, or state/province.`,
+  description: `Calculate statistics about Santa's 2025 flight. Use this when the user asks about total stops, average speed, distance traveled, or statistics filtered by location (e.g., "How many stops did Santa make?", "How many stops in California?", "What was Santa's average speed through California?"). Default to the 2025 data but allow 2024 if explicitly requested for comparison. You can filter by city, country, or state/province.`,
   parameters: {
     type: 'object' as const,
     properties: {
@@ -47,6 +47,11 @@ export const calculateStatisticsTool = tool({
         type: 'boolean' as const,
         description: 'Whether to include total distance traveled. Default: true.',
       },
+      year: {
+        type: 'number' as const,
+        enum: [2024, 2025],
+        description: 'Flight year to analyze. Defaults to 2025 unless the user asks for 2024.',
+      },
     },
     required: [] as const,
     additionalProperties: false as const,
@@ -60,6 +65,7 @@ export const calculateStatisticsTool = tool({
       include_total_stops?: boolean
       include_average_speed?: boolean
       include_total_distance?: boolean
+      year?: FlightYear
     }
     
     const {
@@ -69,18 +75,22 @@ export const calculateStatisticsTool = tool({
       include_total_stops = true,
       include_average_speed = true,
       include_total_distance = true,
+      year: requestedYear,
     } = args
+
+    const year: FlightYear = requestedYear === 2024 ? 2024 : 2025
 
     // Get stops (filtered if location specified)
     let stops: FlightStop[]
     if (city || country || state_province) {
-      stops = searchStopsByLocation({
+      stops = await searchStopsByLocation({
         city: city?.trim(),
         country: country?.trim(),
         state_province: state_province?.trim(),
+        year,
       })
     } else {
-      stops = loadFlightData()
+      stops = await loadFlightData(year)
     }
 
     if (stops.length === 0) {
@@ -93,7 +103,7 @@ export const calculateStatisticsTool = tool({
         ? ` in ${locationParts.join(', ')}`
         : ''
       
-      return `No stops found${locationStr} in Santa's 2024 flight records.`
+      return `No stops found${locationStr} in Santa's ${year} flight records.`
     }
 
     const results: string[] = []
