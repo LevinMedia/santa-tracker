@@ -27,31 +27,42 @@ function weatherCodeToCondition(code: number): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { stop_number, lat, lng } = await request.json()
-    
+    const { stop_number, lat, lng, flight_year } = await request.json()
+    const flightYear = flight_year ? parseInt(flight_year, 10) : undefined
+
     if (!stop_number || lat === undefined || lng === undefined) {
       return NextResponse.json({ error: 'Missing stop_number, lat, or lng' }, { status: 400 })
     }
     
     const supabase = createAdminClient()
-    
+
     // Check if we already have weather for this stop
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from('live_weather')
       .select('temperature_c')
       .eq('stop_number', stop_number)
-      .single()
-    
+
+    if (flightYear) {
+      existingQuery = existingQuery.eq('flight_year', flightYear)
+    }
+
+    const { data: existing } = await existingQuery.single()
+
     if (existing?.temperature_c !== null && existing?.temperature_c !== undefined) {
       // Already have weather, return it
-      const { data: weather } = await supabase
+      let weatherQuery = supabase
         .from('live_weather')
         .select('temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
         .eq('stop_number', stop_number)
-        .single()
-      
-      return NextResponse.json({ 
-        success: true, 
+
+      if (flightYear) {
+        weatherQuery = weatherQuery.eq('flight_year', flightYear)
+      }
+
+      const { data: weather } = await weatherQuery.single()
+
+      return NextResponse.json({
+        success: true,
         status: 'cached',
         weather 
       })
@@ -59,16 +70,21 @@ export async function POST(request: NextRequest) {
     
     // Small random delay to reduce thundering herd (0-500ms)
     await new Promise(resolve => setTimeout(resolve, Math.random() * 500))
-    
+
     // Double-check if another request already saved weather while we waited
-    const { data: recheck } = await supabase
+    let recheckQuery = supabase
       .from('live_weather')
       .select('temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
       .eq('stop_number', stop_number)
-      .single()
-    
+
+    if (flightYear) {
+      recheckQuery = recheckQuery.eq('flight_year', flightYear)
+    }
+
+    const { data: recheck } = await recheckQuery.single()
+
     if (recheck?.temperature_c !== null && recheck?.temperature_c !== undefined) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         success: true, 
         status: 'cached',
         weather: recheck 
@@ -101,16 +117,26 @@ export async function POST(request: NextRequest) {
         ? Math.round((data.current.wind_gusts_10m / 3.6) * 100) / 100 
         : null,
     }
-    
+
     // Save to Supabase
-    const { error: updateError } = await supabase
+    const updatePayload: Record<string, any> = {
+      ...weather,
+      weather_fetched_at: new Date().toISOString(),
+    }
+
+    if (flightYear) {
+      updatePayload.flight_year = flightYear
+    }
+
+    const updateQuery = supabase
       .from('live_weather')
-      .update({
-        ...weather,
-        weather_fetched_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('stop_number', stop_number)
-    
+
+    const { error: updateError } = flightYear
+      ? await updateQuery.eq('flight_year', flightYear)
+      : await updateQuery
+
     if (updateError) {
       console.error('Error saving weather:', updateError)
     }
