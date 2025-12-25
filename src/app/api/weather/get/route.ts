@@ -9,19 +9,27 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const timezoneParam = searchParams.get('timezone')
+    const flightYearParam = searchParams.get('flight_year')
     
     if (!timezoneParam) {
       return NextResponse.json({ error: 'No timezone provided' }, { status: 400 })
     }
     
     const timezone = parseInt(timezoneParam)
+    const flightYear = flightYearParam ? parseInt(flightYearParam) : undefined
     const supabase = createAdminClient()
-    
-    const { data, error } = await supabase
+
+    let query = supabase
       .from('live_weather')
       .select('stop_number, temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
       .eq('utc_offset_rounded', timezone)
       .not('temperature_c', 'is', null)
+
+    if (flightYear) {
+      query = query.eq('flight_year', flightYear)
+    }
+
+    const { data, error } = await query
     
     if (error) {
       console.error('Error fetching weather from Supabase:', error)
@@ -63,19 +71,25 @@ export async function GET(request: NextRequest) {
 // POST endpoint for consistency with existing client code
 export async function POST(request: NextRequest) {
   try {
-    const { timezone } = await request.json() as { timezone: number }
+    const { timezone, flight_year } = await request.json() as { timezone: number, flight_year?: number }
     
     if (timezone === undefined || timezone === null) {
       return NextResponse.json({ error: 'No timezone provided' }, { status: 400 })
     }
     
     const supabase = createAdminClient()
-    
-    const { data, error } = await supabase
+
+    let query = supabase
       .from('live_weather')
       .select('stop_number, temperature_c, weather_condition, wind_speed_mps, wind_direction_deg, wind_gust_mps')
       .eq('utc_offset_rounded', timezone)
       .not('temperature_c', 'is', null)
+
+    if (flight_year) {
+      query = query.eq('flight_year', flight_year)
+    }
+
+    const { data, error } = await query
     
     if (error) {
       console.error('Error fetching weather from Supabase:', error)

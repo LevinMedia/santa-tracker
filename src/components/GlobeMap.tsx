@@ -436,7 +436,7 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
           const response = await fetch('/api/weather/get', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ timezone: tz })
+            body: JSON.stringify({ timezone: tz, flight_year: flightYear })
           })
 
           const data = await response.json()
