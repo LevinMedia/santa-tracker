@@ -48,7 +48,7 @@ function parseCSVLine(line: string): string[] {
 }
 
 /**
- * Parse the 2024 Santa Tracker CSV file
+ * Parse the 2025 Santa Tracker CSV file
  * CSV columns: 0-stop_number, 1-city, 2-country, 3-state_province, 4-lat, 5-lng, 6-timezone,
  *              7-utc_offset, 8-utc_offset_rounded, 9-utc_time, 10-local_time, 11-population
  *              12-temperature_c, 13-weather_condition, 14-wind_speed_mps, 15-wind_direction_deg, 16-wind_gust_mps
@@ -110,7 +110,7 @@ export function loadFlightData(): FlightStop[] {
     return cachedStops
   }
   
-  const csvPath = join(process.cwd(), 'public', '2024_santa_tracker.csv')
+  const csvPath = join(process.cwd(), 'public', '2025_santa_tracker.csv')
   const csvContent = readFileSync(csvPath, 'utf-8')
   cachedStops = parseFlightData(csvContent)
   

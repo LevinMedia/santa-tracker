@@ -411,13 +411,13 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
   useEffect(() => {
     // Skip Supabase fetch for replay mode - weather is already in CSV
     if (!isLive) {
-      setHasLoadedReplayWeather(true)
-      return
-    }
-    
+        setHasLoadedReplayWeather(true)
+        return
+      }
+
     // For live mode, we might still want to fetch fresh weather from Supabase
     // But currently the live CSV is also updated by cron, so this is a no-op
-    setHasLoadedReplayWeather(true)
+      setHasLoadedReplayWeather(true)
   }, [isLive, loading, stops.length])
 
   // Format timestamp to UTC string
