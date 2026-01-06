@@ -344,7 +344,9 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       .then(csv => {
         const lines = csv.trim().split('\n')
         const data: FlightStop[] = []
-        const shouldUseCsvWeather = isLive || !flightYear || flightYear <= 2024
+        // Always use CSV weather for replay mode (weather is baked into historical CSVs)
+        // For live mode, also use CSV weather as it's updated by the cron job
+        const shouldUseCsvWeather = true
 
         for (let i = 1; i < lines.length; i++) {
           const values = parseCSVLine(lines[i])
@@ -404,82 +406,19 @@ export default function GlobeMap({ dataFile = '/2024_santa_tracker.csv', mode = 
       })
   }, [dataFile, flightYear, isLive, mode])
 
-  // Replay mode (2025+): fetch weather from Supabase instead of CSV
+  // Note: Weather data for replays is now baked into the CSV files
+  // This effect is kept for backwards compatibility but won't run since CSV weather is always used
   useEffect(() => {
-    if (isLive || loading || stops.length === 0 || hasLoadedReplayWeather) return
-    if (!flightYear || flightYear <= 2024) return
-
-    let isCancelled = false
-
-    const fetchWeather = async () => {
-      const timezones = Array.from(new Set(
-        stops
-          .map(stop => stop.utc_offset_rounded)
-          .filter((tz): tz is number => typeof tz === 'number' && !isNaN(tz))
-      ))
-
-      if (timezones.length === 0) {
-        setHasLoadedReplayWeather(true)
-        return
-      }
-
-      const weatherByStop: Record<number, {
-        temperature_c: number
-        weather_condition: string
-        wind_speed_mps: number
-        wind_direction_deg: number
-        wind_gust_mps: number | null
-      }> = {}
-
-      for (const tz of timezones) {
-        try {
-          const response = await fetch('/api/weather/get', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ timezone: tz })
-          })
-
-          const data = await response.json()
-          if (data.success && data.weather) {
-            Object.assign(weatherByStop, data.weather)
-          }
-        } catch (error) {
-          console.error(`Error fetching weather for timezone ${tz}:`, error)
-        }
-      }
-
-      if (isCancelled) return
-
-      if (Object.keys(weatherByStop).length > 0) {
-        setStops(prevStops =>
-          prevStops.map(stop => {
-            const weather = weatherByStop[stop.stop_number]
-            if (!weather) return stop
-
-            return {
-              ...stop,
-              temperature_c: weather.temperature_c ?? stop.temperature_c,
-              weather_condition: weather.weather_condition ?? stop.weather_condition,
-              wind_speed_mps: weather.wind_speed_mps ?? stop.wind_speed_mps,
-              wind_direction_deg: weather.wind_direction_deg ?? stop.wind_direction_deg,
-              wind_gust_mps: weather.wind_gust_mps ?? stop.wind_gust_mps,
-            }
-          })
-        )
-
-        setWeatherVersion(v => v + 1)
-        console.log(`Loaded weather for ${Object.keys(weatherByStop).length} stops from Supabase (replay ${flightYear})`)
-      }
-
+    // Skip Supabase fetch for replay mode - weather is already in CSV
+    if (!isLive) {
       setHasLoadedReplayWeather(true)
+      return
     }
-
-    fetchWeather()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [flightYear, hasLoadedReplayWeather, isLive, loading, stops])
+    
+    // For live mode, we might still want to fetch fresh weather from Supabase
+    // But currently the live CSV is also updated by cron, so this is a no-op
+    setHasLoadedReplayWeather(true)
+  }, [isLive, loading, stops.length])
 
   // Format timestamp to UTC string
   const formatUTCTime = useCallback((timestamp: number): string => {
